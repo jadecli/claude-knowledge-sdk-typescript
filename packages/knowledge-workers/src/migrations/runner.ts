@@ -114,7 +114,15 @@ export async function runMigrations(
         const statements = content
           .split(';')
           .map(s => s.trim())
-          .filter(s => s.length > 0 && !s.startsWith('--'));
+          .filter(s => {
+            // Strip leading comment lines to check if there's actual SQL
+            const withoutComments = s
+              .split('\n')
+              .filter(line => !line.trimStart().startsWith('--') && line.trim().length > 0)
+              .join('\n')
+              .trim();
+            return withoutComments.length > 0;
+          });
 
         for (const stmt of statements) {
           await sql(stmt);
