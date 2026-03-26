@@ -2,6 +2,9 @@
  * @module registry/agent-registry
  * Agent registry client — bridges HR data model to Claude Agent SDK.
  * Department plugins use this to register, discover, and resolve agents.
+ *
+ * All agent registration goes through the SCD engine via `createAgent()`
+ * to maintain the temporal invariant: at most one current row per agent_id.
  */
 
 import type { NeonClient } from '../db/neon-client.js';
