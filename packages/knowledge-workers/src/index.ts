@@ -95,3 +95,7 @@ export type { ListAgentsOptions } from './registry/agent-registry.js';
 
 // ── Migrations ──────────────────────────────────────────────────
 export { runMigrations, getMigrationStatus } from './migrations/runner.js';
+
+// ── Worker Config ───────────────────────────────────────────────
+export type { SlackChannel, GitHubRepo, WorkerConfig, WorkerContext, WorkerConfigErrorType } from './db/worker-config.js';
+export { WorkerConfigError, getWorkerConfig, getWorkerConfigByChannel, listWorkerConfigs, getWorkerContext, buildContextString } from './db/worker-config.js';
