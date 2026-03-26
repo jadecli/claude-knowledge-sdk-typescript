@@ -83,3 +83,28 @@ See `references/scrapy-config.md` for ClaudeBot web scraping best practices.
 - Maximum 4 concurrent requests for bulk crawling
 - WebFetch is preferred for small-scale fetching (< 20 pages)
 - Scrapy is preferred for bulk crawling (> 20 pages)
+
+## Evaluation
+
+This skill includes an evaluation suite in `evals/evals.json` following the
+[agentskills.io](https://agentskills.io/skill-creation/evaluating-skills) format.
+
+### Running Evals
+
+1. Spawn a clean subagent per test case (no shared context between runs)
+2. Run each prompt with the skill loaded and without for comparison
+3. Grade assertions against output — require concrete evidence for PASS
+4. Aggregate results into `benchmark.json` with pass_rate and token deltas
+
+### Workspace Structure
+
+```
+llms-txt-crawler-workspace/iteration-N/
+  eval-name/{with_skill,without_skill}/
+    outputs/      — files produced by the run
+    timing.json   — {total_tokens, duration_ms}
+    grading.json  — assertion results
+  benchmark.json  — aggregated comparison
+```
+
+Use the `skill-creator` skill to automate evaluation runs. See `evals/README.md` for details.

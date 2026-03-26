@@ -47,6 +47,8 @@ export type {
   ClaudeModel,
   McpServerConfig,
   BuiltInToolName,
+  ToolPermission,
+  ToolCategory,
   TodoWriteInput,
   TodoWriteOutput,
   TodoItem,
@@ -57,7 +59,17 @@ export type {
   SDKTaskProgressMessage,
   SDKTaskNotificationMessage,
   TaskUsage,
+  TaskCreateInput,
+  TaskGetInput,
+  TaskListInput,
+  TaskUpdateInput,
+  CronCreateInput,
+  CronDeleteInput,
+  CronListInput,
+  LSPOperation,
+  LSPInput,
 } from './types/agent.js';
+export { TOOL_PERMISSIONS } from './types/agent.js';
 
 // ── Knowledge Types ─────────────────────────────────────────────
 export type { DocSource, DocSection, GitHubRepo, EngineeringPost } from './types/knowledge.js';
@@ -87,8 +99,18 @@ export {
 export type { KnowledgeEntry, KnowledgeIndex, FetchProgress } from './knowledge/fetcher.js';
 
 // ── llms.txt Parser ─────────────────────────────────────────────
-export { parseLlmsTxt } from './knowledge/llms-txt-parser.js';
+export { parseLlmsTxt, llmsTxtJsonSchema } from './knowledge/llms-txt-parser.js';
 export type { LlmsTxtLink, LlmsTxtSection, LlmsTxtIndex } from './knowledge/llms-txt-parser.js';
+
+// ── Evaluation Framework (agentskills.io) ──────────────────────
+export type {
+  EvalTestCase,
+  EvalSuite,
+  AssertionResult,
+  GradingResult,
+  TimingData,
+  BenchmarkResult,
+} from './types/evaluation.js';
 
 // ── Context Engineering ─────────────────────────────────────────
 export {

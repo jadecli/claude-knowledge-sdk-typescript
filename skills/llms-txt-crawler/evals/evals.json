@@ -1,0 +1,65 @@
+{
+  "skill_name": "llms-txt-crawler",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Parse the llms.txt at code.claude.com/docs/llms.txt and list all sections",
+      "expected_output": "A structured list of all ## sections with their page links",
+      "files": [],
+      "assertions": [
+        "Output includes at least 3 distinct section names",
+        "Each section contains at least one [title](url) link",
+        "All URLs start with https://",
+        "The WebFetch tool was called at least once"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Crawl the monitoring docs section from llms.txt at code.claude.com/docs/llms.txt",
+      "expected_output": "Monitoring-related content retrieved from discovered URLs and stored in knowledge index",
+      "files": [],
+      "assertions": [
+        "Monitoring-related content was retrieved",
+        "Results include content from at least one monitoring URL",
+        "Output references saving or storing to knowledge index",
+        "WebFetch was called on at least one monitoring URL"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Generate a Scrapy spider for crawling platform.claude.com docs",
+      "expected_output": "A Scrapy project with spider file, settings, and config respecting robots.txt and using ClaudeBot user-agent",
+      "files": [],
+      "assertions": [
+        "A spider Python file was created",
+        "USER_AGENT contains ClaudeBot",
+        "ROBOTSTXT_OBEY is set to True",
+        "Rate limiting of at least 2 seconds is configured"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Index all critical-priority docs from Anthropic's documentation sources",
+      "expected_output": "Multiple critical docs fetched via WebFetch and stored with token estimates",
+      "files": [],
+      "assertions": [
+        "Multiple documentation pages were fetched",
+        "Content was stored or indexed",
+        "Token count or size estimates are present in the output",
+        "WebFetch was called at least 3 times"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "What pages are available in the Claude Code documentation?",
+      "expected_output": "A list of page titles with URLs organized by section from the Claude Code llms.txt",
+      "files": [],
+      "assertions": [
+        "Output lists page titles from the documentation",
+        "URLs are included alongside titles",
+        "Pages are organized by section",
+        "At least 5 pages are listed"
+      ]
+    }
+  ]
+}

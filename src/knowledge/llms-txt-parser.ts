@@ -105,3 +105,49 @@ export function parseLlmsTxt(raw: string): Result<LlmsTxtIndex, Error> {
 
   return Ok({ siteName, siteDescription, sections });
 }
+
+// ── Structured Output Schema ────────────────────────────────
+
+/**
+ * Returns a JSON Schema for LlmsTxtIndex, suitable for use with
+ * output_config.format = { type: "json_schema", schema: llmsTxtJsonSchema() }.
+ *
+ * Guarantees schema-valid typed results when Claude parses llms.txt content.
+ * All objects have additionalProperties: false and all fields in required arrays.
+ * First-request latency includes grammar compilation; cached for 24h after.
+ */
+export function llmsTxtJsonSchema(): Record<string, unknown> {
+  return {
+    type: 'object',
+    properties: {
+      siteName: { type: 'string' },
+      siteDescription: { type: 'string' },
+      sections: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            links: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  url: { type: 'string' },
+                  description: { type: 'string' },
+                },
+                required: ['title', 'url', 'description'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['name', 'links'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['siteName', 'siteDescription', 'sections'],
+    additionalProperties: false,
+  };
+}

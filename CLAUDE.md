@@ -71,6 +71,29 @@ Three GitHub Actions workflows:
 2. **claude-review.yml** — Claude Code Action for PR review (needs `CLAUDE_CODE_OAUTH_TOKEN` secret)
 3. **security.yml** — Claude security review (needs `CLAUDE_CODE_OAUTH_TOKEN` secret)
 
+## Tool Systems
+
+Two separate task-tracking systems exist (do not confuse them):
+
+1. **TodoWrite** — non-interactive/headless/SDK mode only. Complete replacement semantics:
+   every call overwrites the entire list. Used by Agent SDK and background agents.
+2. **TaskCreate/TaskGet/TaskList/TaskUpdate** — interactive CLI sessions. Individual CRUD
+   operations on tasks. Used when a human is at the terminal.
+
+Other tool systems:
+
+- **LSP tool** — built-in tool that auto-reports type errors after `Edit`/`Write` operations
+  when a code intelligence plugin is loaded. Also provides jump-to-def, find-refs, type-info,
+  symbols, implementations, and call hierarchy. Requires `typescript-language-server` installed
+  and `.lsp.json` config. See `.lsp.README.md` for details.
+- **CronCreate/CronDelete/CronList** — session-scoped scheduled tasks. Prompts fire on a cron
+  schedule while the REPL is idle. Gone when Claude exits (not persisted to disk).
+- **EnterWorktree/ExitWorktree** — parallel git worktree sessions for isolated work.
+- **ToolSearch** — deferred tool loading. Searches for and loads tools on demand when
+  tool search is enabled, keeping the initial tool set small.
+
+Complete tool inventory: 30 built-in tools typed in `src/types/agent.ts` as `BuiltInToolName`.
+
 ## Important Context
 
 - Agent SDK query() returns an async generator of SDKMessage

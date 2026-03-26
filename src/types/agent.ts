@@ -173,29 +173,132 @@ export type SubagentResult = {
   readonly sourcesConsulted: ReadonlyArray<string>;
 };
 
-// ── Built-in Tool Names ──────────────────────────────────────
+// ── Built-in Tool Names (complete 30-tool set from tools-reference) ──
 // Matchable in PreToolUse/PostToolUse hooks (from code.claude.com/docs/en/tools-reference)
 
 export type BuiltInToolName =
+  // File operations
   | 'Read'
   | 'Write'
   | 'Edit'
-  | 'MultiEdit'
-  | 'Bash'
   | 'Glob'
   | 'Grep'
-  | 'WebSearch'
+  // Execution
+  | 'Bash'
+  // Web
   | 'WebFetch'
+  | 'WebSearch'
+  // Task management (non-interactive/headless/SDK — complete replacement)
   | 'TodoWrite'
-  | 'Agent'
-  | 'SendMessage'
+  // Task management (interactive CLI sessions — individual CRUD)
+  | 'TaskCreate'
+  | 'TaskGet'
+  | 'TaskList'
+  | 'TaskUpdate'
   | 'TaskStop'
-  | 'TaskOutput' // TaskOutput deprecated v2.1.83
-  | 'AskUser'
-  | 'AskUserQuestion'
+  | 'TaskOutput' // deprecated v2.1.83
+  // Agent & skills
+  | 'Agent'
   | 'Skill'
-  | 'NotebookEdit'
-  | 'NotebookRead';
+  // Navigation & code intelligence
+  | 'LSP' // built-in tool; requires code intelligence plugin + language server
+  | 'ToolSearch'
+  | 'ListMcpResourcesTool'
+  | 'ReadMcpResourceTool'
+  // Session management
+  | 'EnterPlanMode'
+  | 'ExitPlanMode'
+  | 'EnterWorktree'
+  | 'ExitWorktree'
+  | 'CronCreate'
+  | 'CronDelete'
+  | 'CronList'
+  // User interaction
+  | 'AskUserQuestion'
+  // Notebook
+  | 'NotebookEdit';
+
+/**
+ * Whether a tool requires user permission to execute.
+ * 'yes' = requires permission; 'no' = automatically allowed.
+ */
+export type ToolPermission = {
+  readonly tool: BuiltInToolName;
+  readonly requiresPermission: boolean;
+};
+
+/** Permission mapping for all 30 built-in tools */
+export const TOOL_PERMISSIONS: ReadonlyArray<ToolPermission> = [
+  { tool: 'Read', requiresPermission: false },
+  { tool: 'Write', requiresPermission: true },
+  { tool: 'Edit', requiresPermission: true },
+  { tool: 'Glob', requiresPermission: false },
+  { tool: 'Grep', requiresPermission: false },
+  { tool: 'Bash', requiresPermission: true },
+  { tool: 'WebFetch', requiresPermission: true },
+  { tool: 'WebSearch', requiresPermission: true },
+  { tool: 'TodoWrite', requiresPermission: false },
+  { tool: 'TaskCreate', requiresPermission: false },
+  { tool: 'TaskGet', requiresPermission: false },
+  { tool: 'TaskList', requiresPermission: false },
+  { tool: 'TaskUpdate', requiresPermission: false },
+  { tool: 'TaskStop', requiresPermission: false },
+  { tool: 'TaskOutput', requiresPermission: false },
+  { tool: 'Agent', requiresPermission: false },
+  { tool: 'Skill', requiresPermission: true },
+  { tool: 'LSP', requiresPermission: false },
+  { tool: 'ToolSearch', requiresPermission: false },
+  { tool: 'ListMcpResourcesTool', requiresPermission: false },
+  { tool: 'ReadMcpResourceTool', requiresPermission: false },
+  { tool: 'EnterPlanMode', requiresPermission: false },
+  { tool: 'ExitPlanMode', requiresPermission: true },
+  { tool: 'EnterWorktree', requiresPermission: false },
+  { tool: 'ExitWorktree', requiresPermission: false },
+  { tool: 'CronCreate', requiresPermission: false },
+  { tool: 'CronDelete', requiresPermission: false },
+  { tool: 'CronList', requiresPermission: false },
+  { tool: 'AskUserQuestion', requiresPermission: false },
+  { tool: 'NotebookEdit', requiresPermission: true },
+] as const;
+
+/**
+ * Tool categories — discriminated union grouping tools by function.
+ */
+export type ToolCategory =
+  | { readonly category: 'file_ops'; readonly tools: readonly ['Read', 'Write', 'Edit', 'Glob', 'Grep'] }
+  | { readonly category: 'execution'; readonly tools: readonly ['Bash'] }
+  | { readonly category: 'web'; readonly tools: readonly ['WebFetch', 'WebSearch'] }
+  | {
+      readonly category: 'task_management';
+      readonly tools: readonly [
+        'TaskCreate',
+        'TaskGet',
+        'TaskList',
+        'TaskUpdate',
+        'TodoWrite',
+        'TaskStop',
+        'TaskOutput',
+      ];
+    }
+  | { readonly category: 'agent'; readonly tools: readonly ['Agent', 'Skill'] }
+  | {
+      readonly category: 'navigation';
+      readonly tools: readonly ['LSP', 'ToolSearch', 'ListMcpResourcesTool', 'ReadMcpResourceTool'];
+    }
+  | {
+      readonly category: 'session';
+      readonly tools: readonly [
+        'EnterPlanMode',
+        'ExitPlanMode',
+        'EnterWorktree',
+        'ExitWorktree',
+        'CronCreate',
+        'CronDelete',
+        'CronList',
+      ];
+    }
+  | { readonly category: 'user_interaction'; readonly tools: readonly ['AskUserQuestion'] }
+  | { readonly category: 'notebook'; readonly tools: readonly ['NotebookEdit'] };
 
 // ── TodoWrite Types ──────────────────────────────────────────
 // SDK exports the 3-field version; runtime payloads include id + priority
@@ -323,4 +426,81 @@ export type SDKTaskNotificationMessage = {
   readonly output_file: string;
   readonly summary: string;
   readonly usage?: TaskUsage;
+};
+
+// ── Interactive Task Management Types ────────────────────────
+// DISTINCT from TodoWrite. Interactive CLI sessions use TaskCreate/Get/List/Update.
+// TodoWrite = non-interactive/headless/SDK mode (complete replacement).
+// Task* = interactive CLI mode (individual CRUD operations).
+
+/** Input for TaskCreate — creates a new task in the interactive task list */
+export type TaskCreateInput = {
+  readonly content: string;
+  readonly dependencies?: ReadonlyArray<string>;
+  readonly priority?: 'high' | 'medium' | 'low';
+};
+
+/** Input for TaskGet — retrieves full details for a specific task */
+export type TaskGetInput = {
+  readonly task_id: string;
+};
+
+/** Input for TaskList — lists all tasks (no params required) */
+export type TaskListInput = Record<string, never>;
+
+/** Input for TaskUpdate — updates status, content, deps, or deletes a task */
+export type TaskUpdateInput = {
+  readonly task_id: string;
+  readonly status?: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  readonly content?: string;
+  readonly dependencies?: ReadonlyArray<string>;
+  readonly delete?: boolean;
+};
+
+// ── Cron Types ──────────────────────────────────────────────
+// Session-scoped scheduled tasks — gone when Claude exits.
+// CronCreate/CronDelete/CronList tools.
+
+/** Input for CronCreate — schedules a recurring or one-shot prompt */
+export type CronCreateInput = {
+  readonly prompt: string;
+  readonly cron: string; // 5-field cron expression in local timezone
+  readonly recurring?: boolean; // default true; false = fire once then auto-delete
+};
+
+/** Input for CronDelete — cancels a scheduled task by ID */
+export type CronDeleteInput = {
+  readonly id: string;
+};
+
+/** Input for CronList — lists all scheduled tasks (no params required) */
+export type CronListInput = Record<string, never>;
+
+// ── LSP Tool Types ──────────────────────────────────────────
+// The LSP tool is a BUILT-IN tool (not just .lsp.json config).
+// Requires a code intelligence plugin AND the language server binary installed.
+// The .lsp.json configures which language servers are available;
+// the LSP tool then uses them for code intelligence.
+// Auto-reports type errors after every Edit/Write — this is how the agent
+// gets real-time type feedback during code review tasks.
+
+/** Operations supported by the LSP built-in tool */
+export type LSPOperation =
+  | 'diagnostics' // type error reporting (auto after edits)
+  | 'definition' // jump to definition
+  | 'references' // find all references
+  | 'typeInfo' // get type information at position
+  | 'symbols' // list document/workspace symbols
+  | 'implementations' // find implementations of interface/abstract
+  | 'callHierarchy'; // trace incoming/outgoing call hierarchy
+
+/** Input schema for the LSP built-in tool */
+export type LSPInput = {
+  readonly operation: LSPOperation;
+  readonly file_path?: string;
+  readonly position?: {
+    readonly line: number;
+    readonly character: number;
+  };
+  readonly symbol?: string;
 };
