@@ -6,7 +6,13 @@
  * of anthropics/claude-code-action@v1, or structured objects for `settings`.
  */
 
-import type { ClaudeArgs, McpConfigInline, ToolPermissionSet } from '../types/action.js';
+import type {
+  ClaudeArgs,
+  McpConfigInline,
+  ToolPermissionSet,
+  SystemPromptMode,
+  BaseActionInputs,
+} from '../types/action.js';
 
 // ── claude_args string builder ─────────────────────────────────
 
@@ -39,6 +45,18 @@ export function buildClaudeArgs(args: ClaudeArgs): string {
 
   if (args.systemPrompt !== undefined) {
     lines.push(`--system-prompt "${args.systemPrompt.replace(/"/g, '\\"')}"`);
+  }
+
+  if (args.appendSystemPrompt !== undefined) {
+    lines.push(`--append-system-prompt "${args.appendSystemPrompt.replace(/"/g, '\\"')}"`);
+  }
+
+  if (args.fallbackModel !== undefined) {
+    lines.push(`--fallback-model ${args.fallbackModel}`);
+  }
+
+  if (args.resume !== undefined) {
+    lines.push(`--resume ${args.resume}`);
   }
 
   if (args.jsonSchema !== undefined) {
@@ -176,5 +194,60 @@ export function jsonSchema(
     type: 'object',
     properties,
     ...(required !== undefined ? { required } : {}),
+  };
+}
+
+// ── System prompt mode builder ─────────────────────────────────
+
+/**
+ * Convert a SystemPromptMode to the corresponding claude_args flags.
+ * From base-action's parse-sdk-options.ts:
+ * - override: --system-prompt "..."
+ * - append: --append-system-prompt "..."
+ * - default: no flag (uses built-in Claude Code prompt)
+ */
+export function buildSystemPromptArgs(mode: SystemPromptMode): Partial<ClaudeArgs> {
+  switch (mode.mode) {
+    case 'override':
+      return { systemPrompt: mode.prompt };
+    case 'append':
+      return { appendSystemPrompt: mode.appendText };
+    case 'default':
+      return {};
+  }
+}
+
+// ── Base action input builder ──────────────────────────────────
+
+/**
+ * Build a BaseActionInputs config for anthropics/claude-code-base-action@beta.
+ * This is the low-level action — no GitHub PR/issue integration built in.
+ *
+ * @example
+ * buildBaseActionInputs({
+ *   prompt: 'Analyze this codebase and generate a summary',
+ *   oauthToken: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}',
+ *   claudeArgs: buildClaudeArgs({ maxTurns: 5, allowedTools: ['Read', 'Glob', 'Grep'] }),
+ * })
+ */
+export function buildBaseActionInputs(opts: {
+  readonly prompt?: string;
+  readonly promptFile?: string;
+  readonly oauthToken: string;
+  readonly claudeArgs?: string;
+  readonly settings?: string;
+  readonly plugins?: ReadonlyArray<string>;
+  readonly pluginMarketplaces?: ReadonlyArray<string>;
+}): BaseActionInputs {
+  return {
+    claude_code_oauth_token: opts.oauthToken,
+    ...(opts.prompt !== undefined ? { prompt: opts.prompt } : {}),
+    ...(opts.promptFile !== undefined ? { prompt_file: opts.promptFile } : {}),
+    ...(opts.claudeArgs !== undefined ? { claude_args: opts.claudeArgs } : {}),
+    ...(opts.settings !== undefined ? { settings: opts.settings } : {}),
+    ...(opts.plugins !== undefined && opts.plugins.length > 0 ? { plugins: opts.plugins.join('\n') } : {}),
+    ...(opts.pluginMarketplaces !== undefined && opts.pluginMarketplaces.length > 0
+      ? { plugin_marketplaces: opts.pluginMarketplaces.join('\n') }
+      : {}),
   };
 }

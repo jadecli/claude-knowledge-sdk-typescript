@@ -126,7 +126,14 @@ export type {
   SecurityReviewOutputs,
   GitHubCIMcpTool,
   GitHubInlineCommentTool,
+  GitHubCommentMcpTool,
+  BaseActionInputs,
+  BaseActionOutputs,
+  SystemPromptMode,
+  ClaudeRunResult,
+  ProviderRequirements,
 } from './types/action.js';
+export { PROVIDER_REQUIREMENTS, PLUGIN_NAME_REGEX, isValidPluginName, isValidMarketplaceUrl } from './types/action.js';
 
 // ── Action Builders ────────────────────────────────────────────
 export {
@@ -136,6 +143,8 @@ export {
   mcpServerPython,
   promptContext,
   jsonSchema,
+  buildSystemPromptArgs,
+  buildBaseActionInputs,
 } from './action/directives.js';
 export { generateWorkflow, generatePresetWorkflow, generateSecurityReviewWorkflow } from './action/workflow.js';
 export type { WorkflowConfig, WorkflowTrigger } from './action/workflow.js';
