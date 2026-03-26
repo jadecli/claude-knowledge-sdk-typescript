@@ -18,6 +18,7 @@ jobs:
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -30,6 +31,8 @@ jobs:
         with:
           fetch-depth: 1
 
+      # CLAUDE.md already contains all code standards — no need for --append-system-prompt.
+      # Claude Code loads CLAUDE.md automatically on every invocation.
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
@@ -39,19 +42,3 @@ jobs:
             actions: read
           claude_args: |
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(npm run *),Bash(npx *),Bash(git *),Bash(gh pr *),Bash(gh issue *),Bash(gh run *),mcp__github_inline_comment__create_inline_comment"
-            --append-system-prompt "STRICT CODE STANDARDS — Boris Cherny TypeScript Discipline:
-
-            You are working on @jadecli/claude-knowledge-sdk, a strict TypeScript SDK.
-            ALWAYS enforce these patterns in any code you write or review:
-
-            1. Branded types for all IDs (AgentId, SessionId, USD, DocUrl, TokenCount)
-            2. Result<T, E> instead of try/catch — no exceptions crossing module boundaries
-            3. Discriminated unions for all state machines with assertNever() exhaustive matching
-            4. All types use readonly properties — mutability is opt-in, not default
-            5. noUncheckedIndexedAccess: true — always handle undefined from index access
-            6. Smart constructors validate at boundary (TokenCount rejects negative/non-integer)
-            7. export type for type-only exports — no runtime cost for type re-exports
-
-            After ANY code change, run: npm run typecheck && npm test && npx prettier --check 'src/**/*.ts'
-            All three must pass before committing. If prettier fails, run npm run format first.
-            Never commit code that fails typecheck or tests."
