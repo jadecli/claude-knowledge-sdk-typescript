@@ -231,6 +231,39 @@ describe('generateOtelCollectorConfig', () => {
     expect(yaml).toContain('metrics:');
     expect(yaml).toContain('logs:');
   });
+
+  it('logs pipeline uses debug exporter for prometheus (not prometheusremotewrite)', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    // Extract the logs pipeline line
+    const logsSection = yaml.split('logs:')[1];
+    expect(logsSection).toBeDefined();
+    expect(logsSection).toContain('exporters: [debug]');
+    // Ensure logs does NOT use prometheusremotewrite (it only supports metrics)
+    const logsPipeline = logsSection!.split('exporters:')[1]?.split('\n')[0];
+    expect(logsPipeline).not.toContain('prometheusremotewrite');
+  });
+
+  it('logs pipeline uses otlp exporter for non-prometheus backends', () => {
+    const yaml = generateOtelCollectorConfig({ ...config, backend: 'datadog', endpoint: 'https://dd.example.com' });
+    const logsSection = yaml.split('logs:')[1];
+    expect(logsSection).toContain('exporters: [otlp]');
+  });
+
+  it('includes debug exporter in exporters block for prometheus', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('debug: {}');
+  });
+
+  it('formats authHeader from OTLP env format to YAML key-value', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...config,
+      backend: 'honeycomb',
+      endpoint: 'https://api.honeycomb.io',
+      authHeader: 'x-honeycomb-team=my-api-key',
+    });
+    expect(yaml).toContain('x-honeycomb-team: "my-api-key"');
+    expect(yaml).not.toContain('x-honeycomb-team=my-api-key');
+  });
 });
 
 describe('generatePrometheusConfig', () => {

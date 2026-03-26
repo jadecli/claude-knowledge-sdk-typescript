@@ -213,20 +213,33 @@ services:
 // and export to your backend.
 
 export function generateOtelCollectorConfig(config: OtelConfig): string {
+  // Parse authHeader from OTLP env format "Key=Value" to YAML "Key: Value"
+  const formatAuthHeaders = (header: string): string => {
+    return header
+      .split(',')
+      .map((pair) => {
+        const eqIdx = pair.indexOf('=');
+        if (eqIdx === -1) return `      ${pair.trim()}: ""`;
+        return `      ${pair.slice(0, eqIdx).trim()}: "${pair.slice(eqIdx + 1).trim()}"`;
+      })
+      .join('\n');
+  };
+
   const prometheusExporter =
     config.backend === 'prometheus'
       ? `  prometheusremotewrite:
     endpoint: "http://prometheus:9090/api/v1/write"
   prometheus:
     endpoint: "0.0.0.0:8889"
-    namespace: claude_code`
+    namespace: claude_code
+  debug: {}`
       : '';
 
   const otlpExporter =
     config.backend !== 'prometheus'
       ? `  otlp:
     endpoint: "${config.endpoint}"
-    ${config.authHeader ? `headers:\n      ${config.authHeader}` : ''}`
+    ${config.authHeader ? `headers:\n${formatAuthHeaders(config.authHeader)}` : ''}`
       : '';
 
   return `# OTel Collector Config for Claude Code
@@ -261,7 +274,7 @@ service:
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [${config.backend === 'prometheus' ? 'prometheusremotewrite' : 'otlp'}]
+      exporters: [${config.backend === 'prometheus' ? 'debug' : 'otlp'}]
 `;
 }
 
