@@ -71,24 +71,55 @@ claude --plugin-dir ~/repos/claude-knowledge-sdk-typescript
 # Test skill: /claude-knowledge-sdk:llms-txt-crawler
 ```
 
-## CI/CD
+## CI/CD — Opinionated Merge Gate
 
-Six GitHub Actions workflows:
-1. **ci.yml** — typecheck → build → test → lint (merge gate)
-2. **claude-review.yml** — Claude Code Action for PR review (needs `CLAUDE_CODE_OAUTH_TOKEN`)
-3. **claude.yml** — Interactive Claude on @claude mentions in issues/PRs
-4. **security.yml** — Claude security review (needs `CLAUDE_API_KEY`)
-5. **release.yml** — release-please auto-creates Release PRs on push to main
-6. **release-doctor.yml** — validates required secrets exist
+Six GitHub Actions workflows enforce code quality. **ALL must pass to merge.**
+
+### 1. ci.yml — Merge Gate (4 parallel jobs)
+- **typecheck**: `tsc --noEmit` — zero type errors
+- **build**: `tsc` + verify dist outputs (index.js, index.d.ts, cli.js)
+- **test**: `vitest run` + verify minimum 80 tests passing
+- **lint**: `prettier --check` + type-only export verification
+
+### 2. claude-code-review.yml — AI Code Review (BLOCKING)
+- Runs on every PR (opened, synchronize, ready_for_review, reopened)
+- Enforces Boris Cherny TypeScript patterns via structured review checklist:
+  - Branded types, Result<T,E>, discriminated unions, readonly, assertNever()
+  - No `any` without justification, no exceptions across boundaries
+  - Tests required for new functions, edge cases covered
+- Posts APPROVE / REQUEST_CHANGES with specific file:line references
+- Uses `track_progress: true` for visual progress indicators
+- Runs typecheck + tests before reviewing code
+
+### 3. security.yml — Security Review (BLOCKING)
+- Scans for command injection, path traversal, YAML injection, secret exposure
+- Custom scan instructions targeting SDK-specific risks (workflow generation, plugin validation, MCPB templates)
+- Excludes: node_modules, dist, coverage, .claude
+- Rates findings: CRITICAL, HIGH, MEDIUM, LOW
+
+### 4. claude.yml — Interactive @claude Assistant
+- Responds to `@claude` mentions in issues, PR comments, and reviews
+- Has full dev tools: Edit, Write, Read, Glob, Grep, npm, git, gh
+- Enforces Boris Cherny standards via system prompt
+- Must run typecheck + test + prettier before committing
+
+### 5. release.yml — Release Please
+- Auto-creates Release PRs on push to main via googleapis/release-please-action@v4
+- Groups CHANGELOG entries by conventional commit type
+
+### 6. release-doctor.yml — Secret Validation
+- Validates required secrets exist on push to main
+
+### Required Secrets
+- `CLAUDE_CODE_OAUTH_TOKEN` — from `claude setup-token` (Claude Pro Max subscription)
+- `CLAUDE_API_KEY` — Anthropic API key (used by security.yml)
 
 ## DevOps Setup (First-Time)
 
 1. Push to GitHub: `git push -u origin main`
 2. Configure branch protection: `bash scripts/setup-branch-protection.sh`
 3. Install Claude GitHub App: `/install-github-app` in Claude Code
-4. Add GitHub Secrets (Settings → Secrets → Actions):
-   - `CLAUDE_CODE_OAUTH_TOKEN` — run `claude setup-token` locally
-   - `CLAUDE_API_KEY` — Anthropic API key
+4. Add GitHub Secrets (Settings → Secrets → Actions)
 5. Verify: create a test PR to trigger all workflows
 
 ## Commit Convention

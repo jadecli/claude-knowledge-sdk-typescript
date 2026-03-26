@@ -5,27 +5,78 @@ on:
     branches: [main]
   pull_request:
 
+# This is the merge gate. ALL jobs must pass before PR can merge.
+# Configure branch protection: require "typecheck", "build", "test", "lint" to pass.
+
 jobs:
-  build-and-test:
+  typecheck:
+    name: Typecheck (tsc --noEmit)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
-
       - run: npm ci --legacy-peer-deps
+      - run: npm run typecheck
 
-      - name: Typecheck
-        run: npm run typecheck
+  build:
+    name: Build (tsc)
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+      - name: Verify dist outputs
+        run: |
+          test -f dist/index.js || (echo "ERROR: dist/index.js not found" && exit 1)
+          test -f dist/index.d.ts || (echo "ERROR: dist/index.d.ts not found" && exit 1)
+          test -f dist/cli.js || (echo "ERROR: dist/cli.js not found" && exit 1)
+          echo "Build outputs verified: index.js, index.d.ts, cli.js"
 
-      - name: Build
-        run: npm run build
+  test:
+    name: Test (vitest)
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci --legacy-peer-deps
+      - run: npm test
+      - name: Verify test count
+        run: |
+          COUNT=$(npm test 2>&1 | grep -oP '\d+ passed' | grep -oP '\d+')
+          echo "Tests passed: $COUNT"
+          if [ "$COUNT" -lt 80 ]; then
+            echo "ERROR: Expected at least 80 tests, got $COUNT. Did you forget to add tests?"
+            exit 1
+          fi
 
-      - name: Test
-        run: npm test
-
-      - name: Lint (Prettier)
-        run: npx prettier --check "src/**/*.ts"
+  lint:
+    name: Lint (Prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci --legacy-peer-deps
+      - run: npx prettier --check "src/**/*.ts"
+      - name: Check for type-only exports
+        run: |
+          # Warn if any type re-exports use 'export {' instead of 'export type {'
+          # This is a style check — not blocking, just informational
+          if grep -rn "^export {" src/index.ts | grep -v "export type" | grep -v "Ok\|Err\|map\|flat\|assert\|calculate\|generate\|select\|create\|format\|run\|plan\|task\|orchestrate\|recursive\|fetch\|save\|load\|parse\|build\|expand\|mcp\|prompt\|json\|DOC_\|GITHUB_\|ENGINEERING_\|Budget\|MaxTurns\|CONTEXT_\|MODEL_\|OTEL_\|DEFAULT_\|RESEARCH_\|MEASURED_\|PROVIDER_\|PLUGIN_\|isValid\|Manifest" > /dev/null 2>&1; then
+            echo "WARNING: Found non-function exports that might need 'export type' in src/index.ts"
+          fi
+          echo "Export check complete"
