@@ -67,5 +67,8 @@
     "knowledge",
     "opentelemetry"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ]
 }

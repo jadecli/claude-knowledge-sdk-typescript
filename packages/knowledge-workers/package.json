@@ -1,0 +1,60 @@
+{
+  "name": "@jadecli/knowledge-workers",
+  "version": "0.1.0",
+  "description": "Shared CRUD manager, agent registry, SCD engine, and migration runner for the jadecli ecosystem — backed by Neon Postgres 18",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "jade-workers": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsc --watch",
+    "lint": "prettier --check \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "db:migrate": "tsx src/migrations/runner.ts",
+    "prepare": "cd ../.. && husky"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.0",
+    "zod": "^3.24.0"
+  },
+  "peerDependencies": {
+    "@anthropic-ai/claude-agent-sdk": ">=0.2.33"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "files": [
+    "dist/",
+    "migrations/",
+    "skills/",
+    "agents/"
+  ],
+  "keywords": [
+    "jadecli",
+    "knowledge-workers",
+    "neon",
+    "postgres",
+    "crud",
+    "scd",
+    "agent-registry"
+  ],
+  "license": "MIT"
+}
