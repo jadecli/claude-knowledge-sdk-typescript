@@ -11,10 +11,8 @@ export type Result<T, E extends Error = Error> =
 export const Ok = <T>(value: T): Result<T, never> => ({ ok: true, value });
 export const Err = <E extends Error>(error: E): Result<never, E> => ({ ok: false, error });
 
-export const mapResult = <T, U, E extends Error>(
-  result: Result<T, E>,
-  fn: (value: T) => U,
-): Result<U, E> => (result.ok ? Ok(fn(result.value)) : result);
+export const mapResult = <T, U, E extends Error>(result: Result<T, E>, fn: (value: T) => U): Result<U, E> =>
+  result.ok ? Ok(fn(result.value)) : result;
 
 export const flatMapResult = <T, U, E extends Error>(
   result: Result<T, E>,

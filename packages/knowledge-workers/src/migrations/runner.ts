@@ -10,15 +10,14 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import { neon } from '@neondatabase/serverless';
 import { Ok, Err, type Result } from '../types/result.js';
 import type { MigrationResult, AppliedMigration, MigrationError } from '../types/schema.js';
 
 class MigrationErrorImpl extends Error {
-  constructor(
-    public readonly detail: MigrationError,
-  ) {
+  constructor(public readonly detail: MigrationError) {
     super(
       detail.type === 'checksum_mismatch'
         ? `Checksum mismatch for ${detail.filename}: expected ${detail.expected}, got ${detail.actual}`
@@ -58,7 +57,9 @@ export async function getMigrationStatus(
     const rows = await sql(`SELECT * FROM _migrations ORDER BY id ASC`);
     return Ok(rows as unknown as readonly AppliedMigration[]);
   } catch (err) {
-    return Err(new MigrationErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+    return Err(
+      new MigrationErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }),
+    );
   }
 }
 
@@ -69,7 +70,7 @@ export async function runMigrations(
   connectionString: string,
   migrationsDir?: string,
 ): Promise<Result<readonly MigrationResult[], MigrationErrorImpl>> {
-  const dir = migrationsDir ?? resolve(import.meta.dirname, '..', '..', 'migrations');
+  const dir = migrationsDir ?? resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..', 'migrations');
 
   try {
     const sql = neon(connectionString);
@@ -98,12 +99,14 @@ export async function runMigrations(
       const existingChecksum = appliedMap.get(filename);
       if (existingChecksum !== undefined) {
         if (existingChecksum !== checksum) {
-          return Err(new MigrationErrorImpl({
-            type: 'checksum_mismatch',
-            filename,
-            expected: existingChecksum,
-            actual: checksum,
-          }));
+          return Err(
+            new MigrationErrorImpl({
+              type: 'checksum_mismatch',
+              filename,
+              expected: existingChecksum,
+              actual: checksum,
+            }),
+          );
         }
         continue; // Already applied, skip
       }
@@ -128,10 +131,7 @@ export async function runMigrations(
           await sql(stmt);
         }
 
-        await sql(
-          `INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)`,
-          [filename, checksum],
-        );
+        await sql(`INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)`, [filename, checksum]);
         results.push({
           filename,
           applied_at: new Date().toISOString(),
@@ -139,11 +139,13 @@ export async function runMigrations(
         });
         console.error(`  ✓ Applied: ${filename}`);
       } catch (err) {
-        return Err(new MigrationErrorImpl({
-          type: 'migration_failed',
-          filename,
-          cause: err instanceof Error ? err : new Error(String(err)),
-        }));
+        return Err(
+          new MigrationErrorImpl({
+            type: 'migration_failed',
+            filename,
+            cause: err instanceof Error ? err : new Error(String(err)),
+          }),
+        );
       }
     }
 
@@ -153,13 +155,16 @@ export async function runMigrations(
 
     return Ok(results);
   } catch (err) {
-    return Err(new MigrationErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+    return Err(
+      new MigrationErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }),
+    );
   }
 }
 
 // ── CLI Entry Point ─────────────────────────────────────────────
 
-const isDirectRun = import.meta.url === `file://${process.argv[1]}` ||
+const isDirectRun =
+  import.meta.url === `file://${process.argv[1]}` ||
   process.argv[1]?.endsWith('runner.ts') ||
   process.argv[1]?.endsWith('runner.js');
 

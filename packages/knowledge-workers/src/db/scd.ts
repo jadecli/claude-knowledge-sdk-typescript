@@ -7,33 +7,55 @@
  */
 
 import type { NeonClient } from './neon-client.js';
-import { Ok, Err, type Result } from '../types/result.js';
+import { Ok, Err, assertNever, type Result } from '../types/result.js';
 import type { ScdError } from '../types/schema.js';
 
 const FUTURE_END = '9999-12-31T00:00:00Z';
 
-/** Only lowercase identifiers: letters, digits, underscores; must start with letter or underscore. */
+/** Lowercase Postgres identifier: letters, digits, underscores; must start with letter or underscore. */
 const IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/;
 
-function validateIdentifier(name: string, kind: string): void {
-  if (!IDENTIFIER_RE.test(name)) {
-    throw new TypeError(`Invalid SQL identifier for ${kind}: "${name}"`);
+class ScdErrorImpl extends Error {
+  constructor(public readonly detail: ScdError) {
+    super(ScdErrorImpl.message(detail));
+    this.name = 'ScdError';
+  }
+
+  private static message(d: ScdError): string {
+    switch (d.type) {
+      case 'not_found':
+        return `Not found: ${d.entity}/${d.id}`;
+      case 'already_expired':
+        return `Already expired: ${d.entity}/${d.id}`;
+      case 'constraint_violation':
+        return d.detail;
+      case 'invalid_identifier':
+        return `Invalid SQL identifier: ${d.identifier}`;
+      case 'db_error':
+        return d.cause.message;
+      default:
+        return assertNever(d);
+    }
   }
 }
 
-class ScdErrorImpl extends Error {
-  constructor(
-    public readonly detail: ScdError,
-  ) {
-    super(
-      detail.type === 'db_error'
-        ? detail.cause.message
-        : detail.type === 'constraint_violation'
-          ? detail.detail
-          : `${detail.type}: ${detail.entity}/${detail.id}`,
-    );
-    this.name = 'ScdError';
+/**
+ * Validate that a string is a safe Postgres identifier (lowercase convention).
+ * Returns Result — never throws (Boris Cherny: no exceptions across boundaries).
+ */
+export function validateIdentifier(name: string): Result<string, ScdErrorImpl> {
+  if (!IDENTIFIER_RE.test(name)) {
+    return Err(new ScdErrorImpl({ type: 'invalid_identifier', identifier: name }));
   }
+  return Ok(name);
+}
+
+function validateIdentifiers(names: readonly string[]): Result<readonly string[], ScdErrorImpl> {
+  for (const name of names) {
+    const result = validateIdentifier(name);
+    if (!result.ok) return Err(result.error);
+  }
+  return Ok(names);
 }
 
 /**
@@ -47,9 +69,15 @@ export async function insertWithEffectiveDating<T>(
   naturalKeyValue: string,
   row: Record<string, unknown>,
 ): Promise<Result<T, ScdErrorImpl>> {
-  validateIdentifier(table, 'table');
-  validateIdentifier(naturalKeyColumn, 'naturalKeyColumn');
   try {
+    // Validate all identifiers before constructing SQL
+    const tableCheck = validateIdentifier(table);
+    if (!tableCheck.ok) return tableCheck as Result<T, ScdErrorImpl>;
+    const nkCheck = validateIdentifier(naturalKeyColumn);
+    if (!nkCheck.ok) return nkCheck as Result<T, ScdErrorImpl>;
+    const colsCheck = validateIdentifiers(Object.keys(row));
+    if (!colsCheck.ok) return colsCheck as Result<T, ScdErrorImpl>;
+
     // Expire any existing current row
     await client.sql(
       `UPDATE ${table} SET eff_end = now(), is_current = false, updated_at = now()
@@ -78,9 +106,7 @@ export async function insertWithEffectiveDating<T>(
     const rows = await client.sql(sql, insertValues);
     const inserted = rows[0] as T | undefined;
     if (!inserted) {
-      return Err(
-        new ScdErrorImpl({ type: 'constraint_violation', detail: `INSERT into ${table} returned no rows` }),
-      );
+      return Err(new ScdErrorImpl({ type: 'constraint_violation', detail: `INSERT into ${table} returned no rows` }));
     }
     return Ok(inserted);
   } catch (err) {
@@ -97,9 +123,12 @@ export async function expireRow(
   surrogateKeyColumn: string,
   surrogateKeyValue: number,
 ): Promise<Result<void, ScdErrorImpl>> {
-  validateIdentifier(table, 'table');
-  validateIdentifier(surrogateKeyColumn, 'surrogateKeyColumn');
   try {
+    const tableCheck = validateIdentifier(table);
+    if (!tableCheck.ok) return tableCheck as Result<void, ScdErrorImpl>;
+    const skCheck = validateIdentifier(surrogateKeyColumn);
+    if (!skCheck.ok) return skCheck as Result<void, ScdErrorImpl>;
+
     const rows = await client.sql(
       `UPDATE ${table} SET eff_end = now(), is_current = false, updated_at = now()
        WHERE ${surrogateKeyColumn} = $1 AND is_current = true
@@ -131,9 +160,12 @@ export async function getAsOf<T>(
   naturalKeyValue: string,
   asOfDate: Date,
 ): Promise<Result<T | null, ScdErrorImpl>> {
-  validateIdentifier(table, 'table');
-  validateIdentifier(naturalKeyColumn, 'naturalKeyColumn');
   try {
+    const tableCheck = validateIdentifier(table);
+    if (!tableCheck.ok) return tableCheck as Result<T | null, ScdErrorImpl>;
+    const nkCheck = validateIdentifier(naturalKeyColumn);
+    if (!nkCheck.ok) return nkCheck as Result<T | null, ScdErrorImpl>;
+
     const rows = await client.sql(
       `SELECT * FROM ${table}
        WHERE ${naturalKeyColumn} = $1
@@ -158,9 +190,12 @@ export async function getHistory<T>(
   naturalKeyColumn: string,
   naturalKeyValue: string,
 ): Promise<Result<readonly T[], ScdErrorImpl>> {
-  validateIdentifier(table, 'table');
-  validateIdentifier(naturalKeyColumn, 'naturalKeyColumn');
   try {
+    const tableCheck = validateIdentifier(table);
+    if (!tableCheck.ok) return tableCheck as Result<readonly T[], ScdErrorImpl>;
+    const nkCheck = validateIdentifier(naturalKeyColumn);
+    if (!nkCheck.ok) return nkCheck as Result<readonly T[], ScdErrorImpl>;
+
     const rows = await client.sql(
       `SELECT * FROM ${table}
        WHERE ${naturalKeyColumn} = $1

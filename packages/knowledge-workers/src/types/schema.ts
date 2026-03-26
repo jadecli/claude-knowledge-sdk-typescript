@@ -295,6 +295,7 @@ export type ScdError =
   | { readonly type: 'not_found'; readonly entity: string; readonly id: string }
   | { readonly type: 'already_expired'; readonly entity: string; readonly id: string }
   | { readonly type: 'constraint_violation'; readonly detail: string }
+  | { readonly type: 'invalid_identifier'; readonly identifier: string }
   | { readonly type: 'db_error'; readonly cause: Error };
 
 export type AgentCrudError =
@@ -304,12 +305,14 @@ export type AgentCrudError =
   | { readonly type: 'invalid_reporting_chain'; readonly detail: string }
   | { readonly type: 'agent_not_found'; readonly agent_id: string };
 
-export type RegistryError =
-  | AgentCrudError
-  | { readonly type: 'agent_not_found'; readonly agent_id: string }
-  | { readonly type: 'resolution_failed'; readonly detail: string };
+export type RegistryError = AgentCrudError | { readonly type: 'resolution_failed'; readonly detail: string };
 
 export type MigrationError =
-  | { readonly type: 'checksum_mismatch'; readonly filename: string; readonly expected: string; readonly actual: string }
+  | {
+      readonly type: 'checksum_mismatch';
+      readonly filename: string;
+      readonly expected: string;
+      readonly actual: string;
+    }
   | { readonly type: 'migration_failed'; readonly filename: string; readonly cause: Error }
   | { readonly type: 'db_error'; readonly cause: Error };
