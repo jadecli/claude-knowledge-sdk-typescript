@@ -5,10 +5,12 @@
  */
 
 import type { NeonClient } from '../db/neon-client.js';
+import { createAgent } from '../db/agent-crud.js';
 import { Ok, Err, type Result } from '../types/result.js';
 import type {
   AgentDefinition,
   AgentSummary,
+  CreateAgentInput,
   LevelId,
   OrgNode,
   RegistryError,
@@ -16,9 +18,7 @@ import type {
 } from '../types/schema.js';
 
 class RegistryErrorImpl extends Error {
-  constructor(
-    public readonly detail: RegistryError,
-  ) {
+  constructor(public readonly detail: RegistryError) {
     super(
       detail.type === 'db_error'
         ? detail.cause.message
@@ -34,6 +34,8 @@ class RegistryErrorImpl extends Error {
 
 /**
  * Register a new agent from a department plugin.
+ * Delegates to createAgent (SCD Type 2) — re-registering the same agent_id
+ * correctly expires the old row and inserts a new version.
  */
 export async function registerAgent(
   client: NeonClient,
@@ -47,37 +49,29 @@ export async function registerAgent(
   supOrgId: string,
   reportsTo?: string | null,
 ): Promise<Result<string, RegistryErrorImpl>> {
-  try {
-    const rows = await client.sql(
-      `INSERT INTO fact_agent (
-        agent_id, display_name, agent_type, level_id, job_profile_id,
-        department_id, sup_org_id, reports_to, plugin_repo, agent_definition,
-        status, eff_start, eff_end, is_current, created_at, updated_at
-      ) VALUES (
-        $1, $2, 'named', $3, $4, $5, $6, $7, $8, $9,
-        'active', now(), '9999-12-31T00:00:00Z', true, now(), now()
-      ) RETURNING agent_id`,
-      [agentId, displayName, levelId as number, jobProfileId,
-       departmentId, supOrgId, reportsTo ?? null, pluginRepo,
-       JSON.stringify(agentDef)],
-    );
-    const row = rows[0] as { agent_id: string } | undefined;
-    if (!row) {
-      return Err(new RegistryErrorImpl({ type: 'constraint_violation', detail: 'INSERT returned no rows' }));
-    }
-    return Ok(row.agent_id);
-  } catch (err) {
-    return Err(new RegistryErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+  const input: CreateAgentInput = {
+    agent_id: agentId,
+    display_name: displayName,
+    level_id: levelId,
+    job_profile_id: jobProfileId,
+    department_id: departmentId,
+    sup_org_id: supOrgId,
+    reports_to: reportsTo ?? null,
+    plugin_repo: pluginRepo,
+    agent_definition: agentDef,
+  };
+
+  const result = await createAgent(client, input);
+  if (!result.ok) {
+    return Err(new RegistryErrorImpl(result.error.detail));
   }
+  return Ok(result.value.agent_id);
 }
 
 /**
  * Deregister an agent (expire via SCD).
  */
-export async function deregisterAgent(
-  client: NeonClient,
-  agentId: string,
-): Promise<Result<void, RegistryErrorImpl>> {
+export async function deregisterAgent(client: NeonClient, agentId: string): Promise<Result<void, RegistryErrorImpl>> {
   try {
     const rows = await client.sql(
       `UPDATE fact_agent SET eff_end = now(), is_current = false, status = 'terminated', updated_at = now()
@@ -111,10 +105,12 @@ export async function resolveAgent(
       return Err(new RegistryErrorImpl({ type: 'agent_not_found', agent_id: agentId }));
     }
     if (!row.agent_definition) {
-      return Err(new RegistryErrorImpl({
-        type: 'resolution_failed',
-        detail: `Agent ${agentId} has no agent_definition configured`,
-      }));
+      return Err(
+        new RegistryErrorImpl({
+          type: 'resolution_failed',
+          detail: `Agent ${agentId} has no agent_definition configured`,
+        }),
+      );
     }
     return Ok(row.agent_definition);
   } catch (err) {
@@ -176,7 +172,8 @@ export async function listDepartmentAgents(
 }
 
 /**
- * Get the org chart as a tree structure via recursive CTE.
+ * Get the org chart as a tree structure.
+ * Two-pass build: allocate child arrays first, then construct nodes.
  */
 export async function getOrgChart(
   client: NeonClient,
@@ -203,42 +200,35 @@ export async function getOrgChart(
     };
 
     const agents = rows as unknown as FlatNode[];
-    const agentMap = new Map<string, FlatNode>();
-    const childrenMap = new Map<string, OrgNode[]>();
 
+    // Pass 1: pre-allocate mutable child arrays keyed by agent_id
+    const nodeMap = new Map<string, { readonly agent: FlatNode; readonly childNodes: OrgNode[] }>();
     for (const agent of agents) {
-      agentMap.set(agent.agent_id, agent);
-      childrenMap.set(agent.agent_id, []);
+      nodeMap.set(agent.agent_id, { agent, childNodes: [] });
     }
 
-    // Build tree
+    // Pass 2: build OrgNode objects, assign children via map entry
     const roots: OrgNode[] = [];
     for (const agent of agents) {
+      const entry = nodeMap.get(agent.agent_id)!;
       const node: OrgNode = {
         agent_id: agent.agent_id,
         display_name: agent.display_name,
         level_id: agent.level_id,
         level_code: agent.level_code,
         department_id: agent.department_id,
-        children: childrenMap.get(agent.agent_id) ?? [],
+        children: entry.childNodes,
       };
 
-      if (agent.reports_to && childrenMap.has(agent.reports_to)) {
-        childrenMap.get(agent.reports_to)!.push(node);
+      if (agent.reports_to && nodeMap.has(agent.reports_to)) {
+        nodeMap.get(agent.reports_to)!.childNodes.push(node);
       } else {
         roots.push(node);
-      }
-
-      // Replace the placeholder in childrenMap with the actual node's children array
-      const existingChildren = childrenMap.get(agent.agent_id);
-      if (existingChildren) {
-        Object.defineProperty(node, 'children', { value: existingChildren, writable: false });
       }
     }
 
     if (rootAgentId) {
-      const rootNode = roots.find(n => n.agent_id === rootAgentId)
-        ?? findInTree(roots, rootAgentId);
+      const rootNode = roots.find((n) => n.agent_id === rootAgentId) ?? findInTree(roots, rootAgentId);
       return Ok(rootNode ? [rootNode] : []);
     }
 
