@@ -40,30 +40,14 @@ export class MaxTurnsError extends Error {
   }
 }
 
-// ── Model Pricing (current as of 2026-03-25) ────────────────────
+// ── Cost Estimation ──────────────────────────────────────────────
+// Single source of truth: MODEL_PRICING in monitoring/telemetry.ts
+// This re-exports a simplified estimator for the agent loop.
 
-type PricingTier = {
-  readonly input: number;
-  readonly output: number;
-  readonly cacheWrite: number;
-  readonly cacheRead: number;
-};
-
-const PRICING: Record<string, PricingTier> = {
-  'claude-opus-4-6': { input: 15 / 1e6, output: 75 / 1e6, cacheWrite: 18.75 / 1e6, cacheRead: 1.5 / 1e6 },
-  'claude-sonnet-4-6': { input: 3 / 1e6, output: 15 / 1e6, cacheWrite: 3.75 / 1e6, cacheRead: 0.3 / 1e6 },
-  'claude-haiku-4-5': { input: 0.8 / 1e6, output: 4 / 1e6, cacheWrite: 1.0 / 1e6, cacheRead: 0.08 / 1e6 },
-};
+import { calculateCost as _calculateCost } from '../monitoring/telemetry.js';
 
 export function estimateCost(model: string, input: number, output: number): number {
-  // Normalize alias → full model name
-  const key = model.includes('opus')
-    ? 'claude-opus-4-6'
-    : model.includes('haiku')
-      ? 'claude-haiku-4-5'
-      : 'claude-sonnet-4-6';
-  const tier = PRICING[key] ?? PRICING['claude-sonnet-4-6']!;
-  return input * tier.input + output * tier.output;
+  return _calculateCost(model, input, output) as number;
 }
 
 // ── The Loop ────────────────────────────────────────────────────

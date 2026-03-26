@@ -52,8 +52,10 @@ async function main(): Promise<void> {
 // ── fetch-docs ──────────────────────────────────────────────────
 
 async function cmdFetchDocs(args: string[]): Promise<void> {
+  const priorityIdx = args.indexOf('--priority');
   const priorityFlag =
-    args.find((a) => a.startsWith('--priority='))?.split('=')[1] ?? args[args.indexOf('--priority') + 1];
+    args.find((a) => a.startsWith('--priority='))?.split('=')[1] ??
+    (priorityIdx !== -1 ? args[priorityIdx + 1] : undefined);
 
   const priorityFilter =
     priorityFlag === 'critical' ? ('critical' as const) : priorityFlag === 'high' ? ('high' as const) : undefined;
@@ -75,13 +77,11 @@ async function cmdFetchDocs(args: string[]): Promise<void> {
   const index = result.value;
   console.log(`\nFetched ${index.entries.length} entries (~${index.totalTokens.toLocaleString()} tokens)`);
 
-  if (result.ok) {
-    const saveResult = await saveKnowledgeIndex(index, KNOWLEDGE_DIR);
-    if (saveResult.ok) {
-      console.log(`Saved to ${saveResult.value}`);
-    } else {
-      console.error('Failed to save:', saveResult.error.message);
-    }
+  const saveResult = await saveKnowledgeIndex(index, KNOWLEDGE_DIR);
+  if (saveResult.ok) {
+    console.log(`Saved to ${saveResult.value}`);
+  } else {
+    console.error('Failed to save:', saveResult.error.message);
   }
 }
 
@@ -125,12 +125,16 @@ async function cmdSearch(args: string[]): Promise<void> {
 // ── otel-setup ──────────────────────────────────────────────────
 
 async function cmdOtelSetup(args: string[]): Promise<void> {
+  const backendIdx = args.indexOf('--backend');
   const backendFlag =
-    args.find((a) => a.startsWith('--backend='))?.split('=')[1] ?? args[args.indexOf('--backend') + 1] ?? 'prometheus';
+    args.find((a) => a.startsWith('--backend='))?.split('=')[1] ??
+    (backendIdx !== -1 ? args[backendIdx + 1] : undefined) ??
+    'prometheus';
 
+  const endpointIdx = args.indexOf('--endpoint');
   const endpointFlag =
     args.find((a) => a.startsWith('--endpoint='))?.split('=')[1] ??
-    args[args.indexOf('--endpoint') + 1] ??
+    (endpointIdx !== -1 ? args[endpointIdx + 1] : undefined) ??
     'http://localhost:4317';
 
   const config: OtelConfig = {
