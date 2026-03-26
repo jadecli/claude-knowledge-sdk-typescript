@@ -102,15 +102,11 @@ describe('Schema branded types', () => {
     });
 
     it('rejects non-postgres URLs', () => {
-      expect(() => ConnectionString('https://example.com')).toThrow(
-        'ConnectionString must start with postgres://',
-      );
+      expect(() => ConnectionString('https://example.com')).toThrow('ConnectionString must start with postgres://');
     });
 
     it('rejects empty strings', () => {
-      expect(() => ConnectionString('')).toThrow(
-        'ConnectionString must start with postgres://',
-      );
+      expect(() => ConnectionString('')).toThrow('ConnectionString must start with postgres://');
     });
   });
 });
