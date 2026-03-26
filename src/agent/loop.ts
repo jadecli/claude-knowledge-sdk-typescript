@@ -25,7 +25,10 @@ export type LoopResult = {
 
 export class BudgetExceededError extends Error {
   readonly name = 'BudgetExceededError' as const;
-  constructor(readonly spent: number, readonly budget: number) {
+  constructor(
+    readonly spent: number,
+    readonly budget: number,
+  ) {
     super(`Budget exceeded: $${spent.toFixed(4)} > $${budget.toFixed(4)}`);
   }
 }
@@ -39,19 +42,26 @@ export class MaxTurnsError extends Error {
 
 // ── Model Pricing (current as of 2026-03-25) ────────────────────
 
-type PricingTier = { readonly input: number; readonly output: number; readonly cacheWrite: number; readonly cacheRead: number };
+type PricingTier = {
+  readonly input: number;
+  readonly output: number;
+  readonly cacheWrite: number;
+  readonly cacheRead: number;
+};
 
 const PRICING: Record<string, PricingTier> = {
-  'claude-opus-4-6':   { input: 15 / 1e6, output: 75 / 1e6, cacheWrite: 18.75 / 1e6, cacheRead: 1.50 / 1e6 },
-  'claude-sonnet-4-6': { input: 3 / 1e6,  output: 15 / 1e6, cacheWrite: 3.75 / 1e6,  cacheRead: 0.30 / 1e6 },
-  'claude-haiku-4-5':  { input: 0.80 / 1e6, output: 4 / 1e6, cacheWrite: 1.00 / 1e6, cacheRead: 0.08 / 1e6 },
+  'claude-opus-4-6': { input: 15 / 1e6, output: 75 / 1e6, cacheWrite: 18.75 / 1e6, cacheRead: 1.5 / 1e6 },
+  'claude-sonnet-4-6': { input: 3 / 1e6, output: 15 / 1e6, cacheWrite: 3.75 / 1e6, cacheRead: 0.3 / 1e6 },
+  'claude-haiku-4-5': { input: 0.8 / 1e6, output: 4 / 1e6, cacheWrite: 1.0 / 1e6, cacheRead: 0.08 / 1e6 },
 };
 
 export function estimateCost(model: string, input: number, output: number): number {
   // Normalize alias → full model name
-  const key = model.includes('opus') ? 'claude-opus-4-6'
-    : model.includes('haiku') ? 'claude-haiku-4-5'
-    : 'claude-sonnet-4-6';
+  const key = model.includes('opus')
+    ? 'claude-opus-4-6'
+    : model.includes('haiku')
+      ? 'claude-haiku-4-5'
+      : 'claude-sonnet-4-6';
   const tier = PRICING[key] ?? PRICING['claude-sonnet-4-6']!;
   return input * tier.input + output * tier.output;
 }
@@ -60,10 +70,7 @@ export function estimateCost(model: string, input: number, output: number): numb
 // Uses dynamic import so this module compiles even without the SDK installed.
 // The SDK is a peer dependency — consumers install it.
 
-export async function runLoop(
-  prompt: string,
-  options: QueryOptions = {},
-): Promise<Result<LoopResult, Error>> {
+export async function runLoop(prompt: string, options: QueryOptions = {}): Promise<Result<LoopResult, Error>> {
   const start = Date.now();
 
   return tryCatch(async () => {

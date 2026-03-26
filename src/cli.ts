@@ -14,9 +14,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import {
-  fetchAllKnowledge, saveKnowledgeIndex, loadKnowledgeIndex,
-} from './knowledge/fetcher.js';
+import { fetchAllKnowledge, saveKnowledgeIndex, loadKnowledgeIndex } from './knowledge/fetcher.js';
 import { generateOtelShellScript, generateDockerCompose } from './monitoring/telemetry.js';
 import type { OtelBackend, OtelConfig } from './monitoring/telemetry.js';
 
@@ -54,12 +52,11 @@ async function main(): Promise<void> {
 // ── fetch-docs ──────────────────────────────────────────────────
 
 async function cmdFetchDocs(args: string[]): Promise<void> {
-  const priorityFlag = args.find(a => a.startsWith('--priority='))?.split('=')[1]
-    ?? args[args.indexOf('--priority') + 1];
+  const priorityFlag =
+    args.find((a) => a.startsWith('--priority='))?.split('=')[1] ?? args[args.indexOf('--priority') + 1];
 
-  const priorityFilter = priorityFlag === 'critical' ? 'critical' as const
-    : priorityFlag === 'high' ? 'high' as const
-    : undefined;
+  const priorityFilter =
+    priorityFlag === 'critical' ? ('critical' as const) : priorityFlag === 'high' ? ('high' as const) : undefined;
 
   console.log(`Fetching docs${priorityFilter ? ` (${priorityFilter} priority)` : ' (all)'}...`);
 
@@ -107,10 +104,7 @@ async function cmdSearch(args: string[]): Promise<void> {
   const queryLower = query.toLowerCase();
 
   const matches = index.entries
-    .filter(e =>
-      e.title.toLowerCase().includes(queryLower) ||
-      e.content.toLowerCase().includes(queryLower),
-    )
+    .filter((e) => e.title.toLowerCase().includes(queryLower) || e.content.toLowerCase().includes(queryLower))
     .slice(0, 5);
 
   if (matches.length === 0) {
@@ -131,13 +125,13 @@ async function cmdSearch(args: string[]): Promise<void> {
 // ── otel-setup ──────────────────────────────────────────────────
 
 async function cmdOtelSetup(args: string[]): Promise<void> {
-  const backendFlag = args.find(a => a.startsWith('--backend='))?.split('=')[1]
-    ?? args[args.indexOf('--backend') + 1]
-    ?? 'prometheus';
+  const backendFlag =
+    args.find((a) => a.startsWith('--backend='))?.split('=')[1] ?? args[args.indexOf('--backend') + 1] ?? 'prometheus';
 
-  const endpointFlag = args.find(a => a.startsWith('--endpoint='))?.split('=')[1]
-    ?? args[args.indexOf('--endpoint') + 1]
-    ?? 'http://localhost:4317';
+  const endpointFlag =
+    args.find((a) => a.startsWith('--endpoint='))?.split('=')[1] ??
+    args[args.indexOf('--endpoint') + 1] ??
+    'http://localhost:4317';
 
   const config: OtelConfig = {
     backend: backendFlag as OtelBackend,
@@ -159,9 +153,8 @@ async function cmdOtelSetup(args: string[]): Promise<void> {
 // ── otel-compose ────────────────────────────────────────────────
 
 async function cmdOtelCompose(args: string[]): Promise<void> {
-  const backendFlag = args.find(a => a.startsWith('--backend='))?.split('=')[1]
-    ?? args[args.indexOf('--backend') + 1]
-    ?? 'prometheus';
+  const backendFlag =
+    args.find((a) => a.startsWith('--backend='))?.split('=')[1] ?? args[args.indexOf('--backend') + 1] ?? 'prometheus';
 
   const compose = generateDockerCompose(backendFlag as OtelBackend);
   const outPath = './docker-compose.claude-otel.yml';
@@ -227,7 +220,7 @@ Examples:
 `);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error(err);
   process.exit(1);
 });

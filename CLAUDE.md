@@ -5,6 +5,8 @@
 Distilled knowledge SDK for Claude Code (v2.1.83), Agent SDK, and multi-agent research.
 Code-first TypeScript, recursively self-improving, designed for both Claude.ai and Claude Code.
 
+This repo doubles as a **Claude Code plugin** — load with `claude --plugin-dir .`
+
 ## Architecture
 
 ```
@@ -12,9 +14,18 @@ src/
   types/       → Branded types, Result monad, Agent SDK types, Knowledge types
   agent/       → Agent loop (wraps SDK query()), Orchestrator (lead + subagents)
   context/     → Compaction, progressive disclosure, agent memory
-  knowledge/   → Doc fetcher, knowledge index, llms.txt support
+  knowledge/   → Doc fetcher, knowledge index, llms.txt parser
   monitoring/  → OTel config gen, cost tracking, Docker Compose gen
+  __tests__/   → vitest test suite
 skills/        → Claude Code skills (SKILL.md format)
+  doc-fetcher/     — Local documentation oracle
+  research-loop/   — Multi-agent recursive research
+  otel-tracker/    — OTel monitoring setup
+  llms-txt-crawler/ — llms.txt parser + Scrapy spider generator
+agents/        → Plugin agents dir (future)
+.claude-plugin/ → Plugin manifest (plugin.json)
+.lsp.json      → TypeScript LSP config for the plugin
+.github/workflows/ → CI, Claude PR Review, Security Review
 ```
 
 ## Code Standards
@@ -30,18 +41,35 @@ skills/        → Claude Code skills (SKILL.md format)
 
 ## Key Dependencies
 
-- `@anthropic-ai/claude-agent-sdk` — the actual Agent SDK (peer dep)
-- `@anthropic-ai/sdk` — Anthropic API client
-- `@modelcontextprotocol/sdk` — MCP server/client
+- `@anthropic-ai/claude-agent-sdk` — the actual Agent SDK (peer dep, optional)
+- `@anthropic-ai/sdk` — Anthropic API client (peer dep, optional)
+- `@modelcontextprotocol/sdk` — MCP server/client (peer dep, optional)
 - `zod` — runtime schema validation
 
 ## Build & Test
 
 ```bash
-npm run typecheck   # Verify types
+npm run typecheck   # Verify types (tsc --noEmit)
 npm run build       # Compile to dist/
 npm test            # Run vitest
+npm run lint        # Prettier check
+npm run format      # Prettier write
 ```
+
+## Plugin Testing
+
+```bash
+claude --plugin-dir ~/repos/claude-knowledge-sdk-typescript
+# Then: /reload-plugins to refresh
+# Test skill: /claude-knowledge-sdk:llms-txt-crawler
+```
+
+## CI/CD
+
+Three GitHub Actions workflows:
+1. **ci.yml** — typecheck → build → test → lint (merge gate)
+2. **claude-review.yml** — Claude Code Action for PR review (needs `CLAUDE_CODE_OAUTH_TOKEN` secret)
+3. **security.yml** — Claude security review (needs `CLAUDE_API_KEY` secret)
 
 ## Important Context
 
@@ -50,3 +78,7 @@ npm test            # Run vitest
 - Skills are filesystem-only — SDK has no programmatic skill registration
 - OTel events flow through LOGS protocol, not just metrics
 - DISABLE_TELEMETRY ≠ CLAUDE_CODE_ENABLE_TELEMETRY
+- Task→Agent rename in v2.1.63 — SDK emits "Task" in system:init, "Agent" in tool_use blocks
+- TodoWrite uses COMPLETE REPLACEMENT — every call overwrites entire list
+- TaskOutput deprecated v2.1.83; TodoRead removed
+- SendMessage({to:agentId}) replaced Agent resume param

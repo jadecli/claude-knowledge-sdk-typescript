@@ -1,0 +1,5 @@
+{
+  "name": "claude-knowledge-sdk",
+  "version": "0.1.0",
+  "description": "Knowledge SDK with llms.txt crawler, doc fetcher, research orchestrator, and OTel tracker"
+}

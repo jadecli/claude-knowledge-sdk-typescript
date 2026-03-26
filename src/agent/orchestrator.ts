@@ -45,21 +45,24 @@ export function planScale(classification: QueryClassification): {
 
 // ── Task Generator ──────────────────────────────────────────────
 
-export function generateTasks(
-  query: string,
-  classification: QueryClassification,
-): ReadonlyArray<ResearchTask> {
+export function generateTasks(query: string, classification: QueryClassification): ReadonlyArray<ResearchTask> {
   const scale = planScale(classification);
   if (scale.agentCount === 0) return [];
 
   const subtopics: ReadonlyArray<string> = (() => {
     switch (classification.type) {
-      case 'simple': return [];
-      case 'lookup': return classification.sources;
-      case 'comparison': return classification.entities;
-      case 'deep_dive': return classification.facets;
-      case 'survey': return classification.subtopics;
-      default: return assertNever(classification);
+      case 'simple':
+        return [];
+      case 'lookup':
+        return classification.sources;
+      case 'comparison':
+        return classification.entities;
+      case 'deep_dive':
+        return classification.facets;
+      case 'survey':
+        return classification.subtopics;
+      default:
+        return assertNever(classification);
     }
   })();
 
@@ -102,15 +105,17 @@ export async function orchestrateResearch(
       maxTurns: 10,
     });
     if (!result.ok) return result;
-    return Ok([{
-      agentId: makeAgentId('direct'),
-      taskObjective: query,
-      findings: result.value.text,
-      confidence: 0.9,
-      tokenUsage: result.value.usage,
-      durationMs: result.value.durationMs,
-      sourcesConsulted: [],
-    }]);
+    return Ok([
+      {
+        agentId: makeAgentId('direct'),
+        taskObjective: query,
+        findings: result.value.text,
+        confidence: 0.9,
+        tokenUsage: result.value.usage,
+        durationMs: result.value.durationMs,
+        sourcesConsulted: [],
+      },
+    ]);
   }
 
   // Build agent definitions for fan-out
@@ -132,15 +137,17 @@ export async function orchestrateResearch(
 
   if (!result.ok) return result;
 
-  return Ok([{
-    agentId: makeAgentId('lead'),
-    taskObjective: query,
-    findings: result.value.text,
-    confidence: 0.85,
-    tokenUsage: result.value.usage,
-    durationMs: result.value.durationMs,
-    sourcesConsulted: tasks.map(t => t.sources).flat(),
-  }]);
+  return Ok([
+    {
+      agentId: makeAgentId('lead'),
+      taskObjective: query,
+      findings: result.value.text,
+      confidence: 0.85,
+      tokenUsage: result.value.usage,
+      durationMs: result.value.durationMs,
+      sourcesConsulted: tasks.map((t) => t.sources).flat(),
+    },
+  ]);
 }
 
 // ── Recursive Improvement Loop ──────────────────────────────────
@@ -169,9 +176,10 @@ export async function recursiveResearch(
 
   for (let round = 1; round <= maxRounds; round++) {
     // Step 1: Research (or follow up on gaps)
-    const researchPrompt = round === 1
-      ? query
-      : `Given these existing findings:\n\n${currentFindings}\n\nThe following gaps were identified: ${rounds[rounds.length - 1]?.gaps.join(', ')}\n\nResearch these gaps specifically and produce improved, more complete findings.`;
+    const researchPrompt =
+      round === 1
+        ? query
+        : `Given these existing findings:\n\n${currentFindings}\n\nThe following gaps were identified: ${rounds[rounds.length - 1]?.gaps.join(', ')}\n\nResearch these gaps specifically and produce improved, more complete findings.`;
 
     const result = await runLoop(researchPrompt, {
       model: round === 1 ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
@@ -196,7 +204,7 @@ export async function recursiveResearch(
     const gaps: string[] = [];
     if (evalResult.ok && !evalResult.value.text.includes('NO_GAPS')) {
       // Extract gap descriptions
-      const gapLines = evalResult.value.text.split('\n').filter(l => l.trim().length > 10);
+      const gapLines = evalResult.value.text.split('\n').filter((l) => l.trim().length > 10);
       gaps.push(...gapLines.slice(0, 5)); // Cap at 5 gaps per round
     }
 
@@ -221,9 +229,7 @@ export async function recursiveResearch(
 // ── Lead Prompt Builder ─────────────────────────────────────────
 
 function buildLeadPrompt(query: string, tasks: ReadonlyArray<ResearchTask>): string {
-  const taskList = tasks.map(t =>
-    `- Agent "${t.id}": ${t.objective} (tools: ${t.tools.join(', ')})`,
-  ).join('\n');
+  const taskList = tasks.map((t) => `- Agent "${t.id}": ${t.objective} (tools: ${t.tools.join(', ')})`).join('\n');
 
   return `You are a lead research orchestrator. Your job is to coordinate subagent research and synthesize findings.
 

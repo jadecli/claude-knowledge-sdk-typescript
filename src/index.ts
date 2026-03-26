@@ -16,16 +16,47 @@
 // ── Core Types ──────────────────────────────────────────────────
 export type { Result } from './types/core.js';
 export {
-  Ok, Err, mapResult, flatMapResult, tryCatch, assertNever,
-  AgentId, SessionId, ToolCallId, TokenCount, USD, DocUrl,
+  Ok,
+  Err,
+  mapResult,
+  flatMapResult,
+  tryCatch,
+  assertNever,
+  AgentId,
+  SessionId,
+  ToolCallId,
+  TokenCount,
+  USD,
+  DocUrl,
 } from './types/core.js';
 
 // ── Agent Types ─────────────────────────────────────────────────
 export type {
-  AgentDefinition, QueryOptions, SDKMessage, SystemMessage,
-  AssistantMessage, ResultMessage, ContentBlock, HookEvent,
-  TokenUsage, QueryClassification, ResearchTask, SubagentResult,
-  ClaudeModel, McpServerConfig,
+  AgentDefinition,
+  QueryOptions,
+  SDKMessage,
+  SystemMessage,
+  AssistantMessage,
+  ResultMessage,
+  ContentBlock,
+  HookEvent,
+  TokenUsage,
+  QueryClassification,
+  ResearchTask,
+  SubagentResult,
+  ClaudeModel,
+  McpServerConfig,
+  BuiltInToolName,
+  TodoWriteInput,
+  TodoWriteOutput,
+  TodoItem,
+  AgentInput,
+  AgentOutput,
+  AgentOutputUsage,
+  SDKTaskStartedMessage,
+  SDKTaskProgressMessage,
+  SDKTaskNotificationMessage,
+  TaskUsage,
 } from './types/agent.js';
 
 // ── Knowledge Types ─────────────────────────────────────────────
@@ -39,31 +70,50 @@ export { BudgetExceededError, MaxTurnsError } from './agent/loop.js';
 
 // ── Orchestrator ────────────────────────────────────────────────
 export {
-  planScale, generateTasks, taskToAgentDef,
-  orchestrateResearch, recursiveResearch,
+  planScale,
+  generateTasks,
+  taskToAgentDef,
+  orchestrateResearch,
+  recursiveResearch,
 } from './agent/orchestrator.js';
 
 // ── Knowledge Fetcher ───────────────────────────────────────────
 export {
-  fetchAllKnowledge, saveKnowledgeIndex, loadKnowledgeIndex,
+  fetchAllKnowledge,
+  saveKnowledgeIndex,
+  loadKnowledgeIndex,
   formatKnowledgeForContext,
 } from './knowledge/fetcher.js';
 export type { KnowledgeEntry, KnowledgeIndex, FetchProgress } from './knowledge/fetcher.js';
 
+// ── llms.txt Parser ─────────────────────────────────────────────
+export { parseLlmsTxt } from './knowledge/llms-txt-parser.js';
+export type { LlmsTxtLink, LlmsTxtSection, LlmsTxtIndex } from './knowledge/llms-txt-parser.js';
+
 // ── Context Engineering ─────────────────────────────────────────
 export {
-  calculateBudget, selectCompactionStrategy,
-  createToolManifest, formatMemoryForContext,
+  calculateBudget,
+  selectCompactionStrategy,
+  createToolManifest,
+  formatMemoryForContext,
   CONTEXT_PRESETS,
 } from './context/manager.js';
 export type {
-  ContextBudget, CompactionStrategy, ToolManifestEntry,
-  AgentMemoryEntry, MemoryCategory,
+  ContextBudget,
+  CompactionStrategy,
+  ToolManifestEntry,
+  AgentMemoryEntry,
+  MemoryCategory,
 } from './context/manager.js';
 
 // ── Monitoring ──────────────────────────────────────────────────
 export {
-  calculateCost, generateOtelEnvVars, generateOtelShellScript,
-  generateDockerCompose, MODEL_PRICING, OTEL_METRICS, OTEL_LABELS,
+  calculateCost,
+  generateOtelEnvVars,
+  generateOtelShellScript,
+  generateDockerCompose,
+  MODEL_PRICING,
+  OTEL_METRICS,
+  OTEL_LABELS,
 } from './monitoring/telemetry.js';
 export type { OtelConfig, OtelBackend, ModelPricing } from './monitoring/telemetry.js';

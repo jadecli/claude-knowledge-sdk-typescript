@@ -1,0 +1,40 @@
+{
+  "prompts": [
+    {
+      "prompt": "Parse the llms.txt at code.claude.com/docs/llms.txt and list all sections",
+      "expected_behavior": "Fetches the llms.txt file via WebFetch, parses it into sections, and lists section names with link counts",
+      "expected_tools": ["WebFetch"],
+      "assertions": [
+        {"type": "tool_called", "tool": "WebFetch"},
+        {"type": "contains", "value": "##"}
+      ]
+    },
+    {
+      "prompt": "Crawl the Claude Code monitoring docs from llms.txt",
+      "expected_behavior": "Fetches llms.txt, identifies monitoring-related URLs, then crawls each URL via WebFetch and stores content",
+      "expected_tools": ["WebFetch", "Read"],
+      "assertions": [
+        {"type": "tool_called", "tool": "WebFetch"},
+        {"type": "contains", "value": "monitoring"}
+      ]
+    },
+    {
+      "prompt": "Generate a Scrapy spider for crawling platform.claude.com docs",
+      "expected_behavior": "Parses platform.claude.com/llms.txt, then runs generate-spider.py to create a Scrapy project with the discovered URLs",
+      "expected_tools": ["Bash", "Write"],
+      "assertions": [
+        {"type": "contains", "value": "ClaudeBot"},
+        {"type": "contains", "value": "scrapy"}
+      ]
+    },
+    {
+      "prompt": "Index all critical-priority Anthropic docs from the knowledge index",
+      "expected_behavior": "Uses the SDK's fetchAllKnowledge with priority filter, fetches critical docs via WebFetch, and builds a knowledge index",
+      "expected_tools": ["WebFetch", "TodoWrite"],
+      "assertions": [
+        {"type": "tool_called", "tool": "WebFetch"},
+        {"type": "contains", "value": "critical"}
+      ]
+    }
+  ]
+}

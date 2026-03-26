@@ -27,9 +27,27 @@ export type ModelPricing = {
 };
 
 export const MODEL_PRICING: ReadonlyArray<ModelPricing> = [
-  { model: 'claude-opus-4-6', inputPerMillion: 15, outputPerMillion: 75, cacheWritePerMillion: 18.75, cacheReadPerMillion: 1.50 },
-  { model: 'claude-sonnet-4-6', inputPerMillion: 3, outputPerMillion: 15, cacheWritePerMillion: 3.75, cacheReadPerMillion: 0.30 },
-  { model: 'claude-haiku-4-5', inputPerMillion: 0.80, outputPerMillion: 4, cacheWritePerMillion: 1.00, cacheReadPerMillion: 0.08 },
+  {
+    model: 'claude-opus-4-6',
+    inputPerMillion: 15,
+    outputPerMillion: 75,
+    cacheWritePerMillion: 18.75,
+    cacheReadPerMillion: 1.5,
+  },
+  {
+    model: 'claude-sonnet-4-6',
+    inputPerMillion: 3,
+    outputPerMillion: 15,
+    cacheWritePerMillion: 3.75,
+    cacheReadPerMillion: 0.3,
+  },
+  {
+    model: 'claude-haiku-4-5',
+    inputPerMillion: 0.8,
+    outputPerMillion: 4,
+    cacheWritePerMillion: 1.0,
+    cacheReadPerMillion: 0.08,
+  },
 ] as const;
 
 export function calculateCost(
@@ -39,13 +57,12 @@ export function calculateCost(
   cacheWriteTokens: number = 0,
   cacheReadTokens: number = 0,
 ): USD {
-  const pricing = MODEL_PRICING.find(p => model.includes(p.model.split('-')[1]!))
-    ?? MODEL_PRICING[1]!;
+  const pricing = MODEL_PRICING.find((p) => model.includes(p.model.split('-')[1]!)) ?? MODEL_PRICING[1]!;
   const cost =
-    (inputTokens * pricing.inputPerMillion / 1_000_000) +
-    (outputTokens * pricing.outputPerMillion / 1_000_000) +
-    (cacheWriteTokens * pricing.cacheWritePerMillion / 1_000_000) +
-    (cacheReadTokens * pricing.cacheReadPerMillion / 1_000_000);
+    (inputTokens * pricing.inputPerMillion) / 1_000_000 +
+    (outputTokens * pricing.outputPerMillion) / 1_000_000 +
+    (cacheWriteTokens * pricing.cacheWritePerMillion) / 1_000_000 +
+    (cacheReadTokens * pricing.cacheReadPerMillion) / 1_000_000;
   return makeUSD(cost);
 }
 

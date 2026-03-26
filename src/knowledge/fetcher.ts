@@ -41,7 +41,7 @@ async function fetchUrl(url: string): Promise<Result<string, Error>> {
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'claude-knowledge-sdk/0.1.0',
-        'Accept': 'text/plain, text/markdown, text/html',
+        Accept: 'text/plain, text/markdown, text/html',
       },
       signal: AbortSignal.timeout(30_000),
     });
@@ -79,15 +79,14 @@ async function fetchDocSection(section: DocSection): Promise<Result<KnowledgeEnt
   const result = await fetchUrl(section.url);
   if (!result.ok) return result;
 
-  const content = result.value.startsWith('<')
-    ? htmlToText(result.value)
-    : result.value;
+  const content = result.value.startsWith('<') ? htmlToText(result.value) : result.value;
 
   // Truncate to ~8K tokens to keep context manageable
   const maxChars = 32_000;
-  const truncated = content.length > maxChars
-    ? content.slice(0, maxChars) + '\n\n[TRUNCATED — full doc at ' + section.url + ']'
-    : content;
+  const truncated =
+    content.length > maxChars
+      ? content.slice(0, maxChars) + '\n\n[TRUNCATED — full doc at ' + section.url + ']'
+      : content;
 
   return Ok({
     source: section.url,
@@ -107,9 +106,11 @@ async function fetchGitHubFile(repo: GitHubRepo, file: string): Promise<Result<K
   if (!result.ok) return result;
 
   const maxChars = 32_000;
-  const truncated = result.value.length > maxChars
-    ? result.value.slice(0, maxChars) + `\n\n[TRUNCATED — full file at github.com/${repo.org}/${repo.repo}/blob/main/${file}]`
-    : result.value;
+  const truncated =
+    result.value.length > maxChars
+      ? result.value.slice(0, maxChars) +
+        `\n\n[TRUNCATED — full file at github.com/${repo.org}/${repo.repo}/blob/main/${file}]`
+      : result.value;
 
   return Ok({
     source: `github:${repo.org}/${repo.repo}`,
@@ -138,19 +139,17 @@ export async function fetchAllKnowledge(
   const errors: string[] = [];
 
   // Collect all fetch targets
-  const sections = DOC_SOURCES.flatMap(source =>
+  const sections = DOC_SOURCES.flatMap((source) =>
     source.sections
-      .filter(s => {
+      .filter((s) => {
         if (!options.priorityFilter) return true;
         if (options.priorityFilter === 'critical') return s.priority === 'critical';
         return s.priority === 'critical' || s.priority === 'high';
       })
-      .map(section => ({ source, section })),
+      .map((section) => ({ source, section })),
   );
 
-  const githubFiles = GITHUB_REPOS.flatMap(repo =>
-    repo.keyFiles.map(file => ({ repo, file })),
-  );
+  const githubFiles = GITHUB_REPOS.flatMap((repo) => repo.keyFiles.map((file) => ({ repo, file })));
 
   const total = sections.length + githubFiles.length;
   let completed = 0;
@@ -213,10 +212,7 @@ export async function fetchAllKnowledge(
 
 // ── Save / Load Knowledge Index ─────────────────────────────────
 
-export async function saveKnowledgeIndex(
-  index: KnowledgeIndex,
-  dir: string,
-): Promise<Result<string, Error>> {
+export async function saveKnowledgeIndex(index: KnowledgeIndex, dir: string): Promise<Result<string, Error>> {
   return tryCatch(async () => {
     await mkdir(dir, { recursive: true });
     const path = join(dir, 'knowledge-index.json');
@@ -225,9 +221,7 @@ export async function saveKnowledgeIndex(
   });
 }
 
-export async function loadKnowledgeIndex(
-  dir: string,
-): Promise<Result<KnowledgeIndex, Error>> {
+export async function loadKnowledgeIndex(dir: string): Promise<Result<KnowledgeIndex, Error>> {
   return tryCatch(async () => {
     const path = join(dir, 'knowledge-index.json');
     const raw = await readFile(path, 'utf-8');
@@ -248,11 +242,11 @@ export function formatKnowledgeForContext(
 
   if (filter?.sources) {
     const sources = new Set(filter.sources);
-    filtered = filtered.filter(e => sources.has(e.source));
+    filtered = filtered.filter((e) => sources.has(e.source));
   }
   if (filter?.titleContains) {
     const needle = filter.titleContains.toLowerCase();
-    filtered = filtered.filter(e => e.title.toLowerCase().includes(needle));
+    filtered = filtered.filter((e) => e.title.toLowerCase().includes(needle));
   }
 
   // Sort by token estimate ascending (pack more entries)

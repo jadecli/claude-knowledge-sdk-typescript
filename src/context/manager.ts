@@ -58,12 +58,7 @@ export function selectCompactionStrategy(budget: ContextBudget): CompactionStrat
   if (budget.usageRatio < 0.9) {
     return {
       type: 'conversation_summary',
-      preservePatterns: [
-        'architectural_decision',
-        'unresolved_bug',
-        'file_path',
-        'key_finding',
-      ],
+      preservePatterns: ['architectural_decision', 'unresolved_bug', 'file_path', 'key_finding'],
     };
   }
   return {
@@ -77,7 +72,7 @@ export function selectCompactionStrategy(budget: ContextBudget): CompactionStrat
 
 export type ToolManifestEntry = {
   readonly name: string;
-  readonly briefDescription: string;       // ~20 tokens in context
+  readonly briefDescription: string; // ~20 tokens in context
   readonly fullSchema: Record<string, unknown>; // ~200+ tokens loaded on demand
   readonly alwaysLoad: boolean;
 };
@@ -87,15 +82,16 @@ export function createToolManifest(tools: ReadonlyArray<ToolManifestEntry>): {
   deferred: ReadonlyArray<{ name: string; description: string }>;
   tokenSavings: number;
 } {
-  const alwaysLoaded = tools.filter(t => t.alwaysLoad).map(t => t.fullSchema);
-  const deferred = tools.filter(t => !t.alwaysLoad).map(t => ({
-    name: t.name,
-    description: t.briefDescription,
-  }));
+  const alwaysLoaded = tools.filter((t) => t.alwaysLoad).map((t) => t.fullSchema);
+  const deferred = tools
+    .filter((t) => !t.alwaysLoad)
+    .map((t) => ({
+      name: t.name,
+      description: t.briefDescription,
+    }));
 
   const fullTokens = tools.reduce((sum, t) => sum + estimateSchemaTokens(t.fullSchema), 0);
-  const reducedTokens = alwaysLoaded.reduce((sum, s) => sum + estimateSchemaTokens(s), 0)
-    + deferred.length * 20; // ~20 tokens per brief description
+  const reducedTokens = alwaysLoaded.reduce((sum, s) => sum + estimateSchemaTokens(s), 0) + deferred.length * 20; // ~20 tokens per brief description
 
   return {
     alwaysLoaded,
@@ -127,10 +123,7 @@ export type AgentMemoryEntry = {
   readonly confidence: number; // 0-1
 };
 
-export function formatMemoryForContext(
-  entries: ReadonlyArray<AgentMemoryEntry>,
-  maxTokens: number,
-): string {
+export function formatMemoryForContext(entries: ReadonlyArray<AgentMemoryEntry>, maxTokens: number): string {
   const priorityOrder: Record<MemoryCategory, number> = {
     key_finding: 0,
     unresolved_bug: 1,
@@ -140,9 +133,7 @@ export function formatMemoryForContext(
     todo: 5,
   };
 
-  const sorted = [...entries].sort((a, b) =>
-    priorityOrder[a.category] - priorityOrder[b.category],
-  );
+  const sorted = [...entries].sort((a, b) => priorityOrder[a.category] - priorityOrder[b.category]);
 
   let output = '## Agent Memory\n\n';
   let tokens = 10;
