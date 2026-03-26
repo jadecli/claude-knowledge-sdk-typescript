@@ -171,6 +171,20 @@ export {
 export { generateWorkflow, generatePresetWorkflow, generateSecurityReviewWorkflow } from './action/workflow.js';
 export type { WorkflowConfig, WorkflowTrigger } from './action/workflow.js';
 
+// ── Task & Todo Primitives ─────────────────────────────────────
+export {
+  todo,
+  buildTodoList,
+  markInProgress,
+  markCompleted,
+  quickTodoList,
+  buildAgentInput,
+  buildResearchAgent,
+  buildImplementationAgent,
+  todoFilePath,
+  subagentTodoFilePath,
+} from './action/tasks.js';
+
 // ── MCPB Desktop Extension Types ───────────────────────────────
 export type {
   McpbManifest,
