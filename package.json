@@ -1,6 +1,6 @@
 {
   "name": "@jadecli/claude-knowledge-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Distilled knowledge SDK for Claude Code, Agent SDK, and multi-agent research — code-first, type-safe, recursively self-improving",
   "type": "module",
   "main": "dist/index.js",
