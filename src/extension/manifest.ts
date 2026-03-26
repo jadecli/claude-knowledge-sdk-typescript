@@ -8,6 +8,7 @@
 
 import type {
   McpbManifest,
+  McpbMcpConfig,
   McpbServerType,
   McpbToolDeclaration,
   McpbPromptDeclaration,
@@ -77,70 +78,74 @@ export function buildManifest(opts: ManifestBuilderOptions): McpbManifest {
 
 // ── Fluent builder for complex manifests ───────────────────────
 
+// Mutable internal type — the builder mutates in place for O(1) per call.
+// build() returns the readonly McpbManifest type.
+type MutableManifest = { -readonly [K in keyof McpbManifest]: McpbManifest[K] };
+
 export class ManifestBuilder {
-  private manifest: McpbManifest;
+  private m: MutableManifest;
 
   constructor(opts: ManifestBuilderOptions) {
-    this.manifest = buildManifest(opts);
+    this.m = buildManifest(opts) as MutableManifest;
   }
 
   displayName(name: string): this {
-    this.manifest = { ...this.manifest, display_name: name };
+    this.m.display_name = name;
     return this;
   }
 
   longDescription(desc: string): this {
-    this.manifest = { ...this.manifest, long_description: desc };
+    this.m.long_description = desc;
     return this;
   }
 
   repository(url: string): this {
-    this.manifest = { ...this.manifest, repository: { type: 'git', url } };
+    this.m.repository = { type: 'git', url };
     return this;
   }
 
   homepage(url: string): this {
-    this.manifest = { ...this.manifest, homepage: url };
+    this.m.homepage = url;
     return this;
   }
 
   icon(path: string): this {
-    this.manifest = { ...this.manifest, icon: path };
+    this.m.icon = path;
     return this;
   }
 
   license(spdx: string): this {
-    this.manifest = { ...this.manifest, license: spdx };
+    this.m.license = spdx;
     return this;
   }
 
   keywords(...kw: string[]): this {
-    this.manifest = { ...this.manifest, keywords: kw };
+    this.m.keywords = kw;
     return this;
   }
 
   tool(name: string, description: string): this {
-    const existing = this.manifest.tools ?? [];
-    const tool: McpbToolDeclaration = { name, description };
-    this.manifest = { ...this.manifest, tools: [...existing, tool] };
+    const existing = (this.m.tools as McpbToolDeclaration[] | undefined) ?? [];
+    existing.push({ name, description });
+    this.m.tools = existing;
     return this;
   }
 
   prompt(name: string, description: string, args?: ReadonlyArray<string>, text?: string): this {
-    const existing = this.manifest.prompts ?? [];
-    const prompt: McpbPromptDeclaration = {
+    const existing = (this.m.prompts as McpbPromptDeclaration[] | undefined) ?? [];
+    existing.push({
       name,
       description,
       ...(args !== undefined ? { arguments: args } : {}),
       ...(text !== undefined ? { text } : {}),
-    };
-    this.manifest = { ...this.manifest, prompts: [...existing, prompt] };
+    });
+    this.m.prompts = existing;
     return this;
   }
 
   userConfig(key: string, field: McpbUserConfigField): this {
-    const existing = this.manifest.user_config ?? {};
-    this.manifest = { ...this.manifest, user_config: { ...existing, [key]: field } };
+    if (this.m.user_config === undefined) this.m.user_config = {};
+    (this.m.user_config as Record<string, McpbUserConfigField>)[key] = field;
     return this;
   }
 
@@ -168,32 +173,24 @@ export class ManifestBuilder {
   }
 
   compatibility(compat: McpbCompatibility): this {
-    this.manifest = { ...this.manifest, compatibility: compat };
+    this.m.compatibility = compat;
     return this;
   }
 
   /** Add platform-specific overrides to the server config */
   platformOverride(platform: McpbPlatform, overrides: { command?: string; env?: Record<string, string> }): this {
-    const existing = this.manifest.server.mcp_config.platforms ?? {};
-    this.manifest = {
-      ...this.manifest,
-      server: {
-        ...this.manifest.server,
-        mcp_config: {
-          ...this.manifest.server.mcp_config,
-          platforms: { ...existing, [platform]: overrides },
-        },
-      },
-    };
+    const mcpConfig = this.m.server.mcp_config as { platforms?: Record<string, unknown> } & McpbMcpConfig;
+    if (mcpConfig.platforms === undefined) mcpConfig.platforms = {};
+    (mcpConfig.platforms as Record<string, unknown>)[platform] = overrides;
     return this;
   }
 
   build(): McpbManifest {
-    return this.manifest;
+    return this.m as McpbManifest;
   }
 
   /** Serialize to JSON string (pretty-printed) */
   toJSON(): string {
-    return JSON.stringify(this.manifest, null, 2);
+    return JSON.stringify(this.m, null, 2);
   }
 }

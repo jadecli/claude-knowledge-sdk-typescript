@@ -57,7 +57,17 @@ export function calculateCost(
   cacheWriteTokens: number = 0,
   cacheReadTokens: number = 0,
 ): USD {
-  const pricing = MODEL_PRICING.find((p) => model.includes(p.model.split('-')[1]!)) ?? MODEL_PRICING[1]!;
+  // Match by exact model name first, then by model family keyword (opus/sonnet/haiku).
+  // Uses explicit keyword matching to avoid false positives from substring collision.
+  const pricing =
+    MODEL_PRICING.find((p) => model === p.model) ??
+    MODEL_PRICING.find((p) => {
+      if (p.model.includes('opus')) return model.includes('opus');
+      if (p.model.includes('haiku')) return model.includes('haiku');
+      if (p.model.includes('sonnet')) return model.includes('sonnet');
+      return false;
+    }) ??
+    MODEL_PRICING[1]!;
   const cost =
     (inputTokens * pricing.inputPerMillion) / 1_000_000 +
     (outputTokens * pricing.outputPerMillion) / 1_000_000 +

@@ -176,10 +176,19 @@ export async function recursiveResearch(
 
   for (let round = 1; round <= maxRounds; round++) {
     // Step 1: Research (or follow up on gaps)
+    // Truncate findings to prevent token balloon on follow-up rounds.
+    // Each subagent explores ~10K tokens but summaries should be ~2K.
+    // Cap injected context at 8K chars (~2K tokens) to stay within budget.
+    const MAX_FINDINGS_CHARS = 8000;
+    const truncatedFindings =
+      currentFindings.length > MAX_FINDINGS_CHARS
+        ? currentFindings.slice(0, MAX_FINDINGS_CHARS) + '\n\n[...truncated for context budget]'
+        : currentFindings;
+
     const researchPrompt =
       round === 1
         ? query
-        : `Given these existing findings:\n\n${currentFindings}\n\nThe following gaps were identified: ${rounds[rounds.length - 1]?.gaps.join(', ')}\n\nResearch these gaps specifically and produce improved, more complete findings.`;
+        : `Given these existing findings:\n\n${truncatedFindings}\n\nThe following gaps were identified: ${rounds[rounds.length - 1]?.gaps.join(', ')}\n\nResearch these gaps specifically and produce improved, more complete findings.`;
 
     const result = await runLoop(researchPrompt, {
       model: round === 1 ? 'claude-sonnet-4-6' : 'claude-haiku-4-5',
@@ -192,8 +201,14 @@ export async function recursiveResearch(
     currentFindings = result.value.text;
 
     // Step 2: Evaluate for gaps
+    // Truncate for eval prompt too — eval only needs to assess completeness, not re-read everything
+    const evalTruncated =
+      currentFindings.length > MAX_FINDINGS_CHARS
+        ? currentFindings.slice(0, MAX_FINDINGS_CHARS) + '\n\n[...truncated]'
+        : currentFindings;
+
     const evalResult = await runLoop(
-      `Evaluate these research findings for completeness and accuracy. List any gaps, missing perspectives, or areas that need deeper investigation. If the findings are comprehensive, say "NO_GAPS".\n\nFindings:\n${currentFindings}`,
+      `Evaluate these research findings for completeness and accuracy. List any gaps, missing perspectives, or areas that need deeper investigation. If the findings are comprehensive, say "NO_GAPS".\n\nFindings:\n${evalTruncated}`,
       {
         model: 'claude-haiku-4-5',
         effort: 'low',
