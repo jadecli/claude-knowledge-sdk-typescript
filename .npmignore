@@ -1,0 +1,14 @@
+src
+.github
+.claude-plugin
+skills
+agents
+.husky
+*.test.ts
+vitest.config.ts
+commitlint.config.js
+.lsp.json
+.lsp.README.md
+.editorconfig
+.prettierrc
+.prettierignore

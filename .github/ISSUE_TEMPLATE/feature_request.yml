@@ -1,0 +1,31 @@
+name: Feature Request
+description: Suggest a feature
+labels: [enhancement]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the feature
+      description: A clear description of the feature
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: Why is this feature needed?
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - types
+        - agent
+        - knowledge
+        - context
+        - monitoring
+        - cli
+        - crawler
+        - plugin
