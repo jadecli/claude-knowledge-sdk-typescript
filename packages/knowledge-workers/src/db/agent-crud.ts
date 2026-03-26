@@ -7,18 +7,10 @@
 import type { NeonClient } from './neon-client.js';
 import { insertWithEffectiveDating } from './scd.js';
 import { Ok, Err, type Result } from '../types/result.js';
-import type {
-  FactAgent,
-  CreateAgentInput,
-  UpdateAgentInput,
-  AgentCrudError,
-  LevelId,
-} from '../types/schema.js';
+import type { FactAgent, CreateAgentInput, UpdateAgentInput, AgentCrudError, LevelId } from '../types/schema.js';
 
 class AgentCrudErrorImpl extends Error {
-  constructor(
-    public readonly detail: AgentCrudError,
-  ) {
+  constructor(public readonly detail: AgentCrudError) {
     super(
       detail.type === 'db_error'
         ? detail.cause.message
@@ -67,9 +59,7 @@ export async function createAgent(
     updated_at: new Date().toISOString(),
   };
 
-  const result = await insertWithEffectiveDating<FactAgent>(
-    client, 'fact_agent', 'agent_id', input.agent_id, row,
-  );
+  const result = await insertWithEffectiveDating<FactAgent>(client, 'fact_agent', 'agent_id', input.agent_id, row);
 
   if (!result.ok) {
     return Err(new AgentCrudErrorImpl(result.error.detail));
@@ -85,14 +75,15 @@ export async function getAgent(
   agentId: string,
 ): Promise<Result<FactAgent | null, AgentCrudErrorImpl>> {
   try {
-    const rows = await client.sql(
-      `SELECT * FROM fact_agent WHERE agent_id = $1 AND is_current = true LIMIT 1`,
-      [agentId],
-    );
+    const rows = await client.sql(`SELECT * FROM fact_agent WHERE agent_id = $1 AND is_current = true LIMIT 1`, [
+      agentId,
+    ]);
     const row = rows[0] as FactAgent | undefined;
     return Ok(row ?? null);
   } catch (err) {
-    return Err(new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+    return Err(
+      new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }),
+    );
   }
 }
 
@@ -132,9 +123,14 @@ export async function updateAgent(
     sup_org_id: updates.sup_org_id ?? current.sup_org_id,
     reports_to: updates.reports_to !== undefined ? updates.reports_to : current.reports_to,
     plugin_repo: updates.plugin_repo !== undefined ? updates.plugin_repo : current.plugin_repo,
-    agent_definition: updates.agent_definition !== undefined
-      ? (updates.agent_definition ? JSON.stringify(updates.agent_definition) : null)
-      : (current.agent_definition ? JSON.stringify(current.agent_definition) : null),
+    agent_definition:
+      updates.agent_definition !== undefined
+        ? updates.agent_definition
+          ? JSON.stringify(updates.agent_definition)
+          : null
+        : current.agent_definition
+          ? JSON.stringify(current.agent_definition)
+          : null,
     model_preference: updates.model_preference ?? current.model_preference,
     allowed_tools: updates.allowed_tools !== undefined ? updates.allowed_tools : current.allowed_tools,
     skills: updates.skills !== undefined ? updates.skills : current.skills,
@@ -146,9 +142,7 @@ export async function updateAgent(
     updated_at: new Date().toISOString(),
   };
 
-  const result = await insertWithEffectiveDating<FactAgent>(
-    client, 'fact_agent', 'agent_id', agentId, row,
-  );
+  const result = await insertWithEffectiveDating<FactAgent>(client, 'fact_agent', 'agent_id', agentId, row);
 
   if (!result.ok) {
     return Err(new AgentCrudErrorImpl(result.error.detail));
@@ -159,10 +153,7 @@ export async function updateAgent(
 /**
  * Deactivate an agent — sets status to 'inactive' via SCD update.
  */
-export async function deactivateAgent(
-  client: NeonClient,
-  agentId: string,
-): Promise<Result<void, AgentCrudErrorImpl>> {
+export async function deactivateAgent(client: NeonClient, agentId: string): Promise<Result<void, AgentCrudErrorImpl>> {
   const result = await updateAgent(client, agentId, { status: 'inactive' });
   if (!result.ok) return result as unknown as Result<void, AgentCrudErrorImpl>;
   return Ok(undefined);
@@ -184,7 +175,9 @@ export async function listAgentsByDepartment(
     );
     return Ok(rows as unknown as readonly FactAgent[]);
   } catch (err) {
-    return Err(new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+    return Err(
+      new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }),
+    );
   }
 }
 
@@ -204,7 +197,9 @@ export async function listAgentsByLevel(
     );
     return Ok(rows as unknown as readonly FactAgent[]);
   } catch (err) {
-    return Err(new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+    return Err(
+      new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }),
+    );
   }
 }
 
@@ -229,7 +224,9 @@ export async function getReportingChain(
     );
     return Ok(rows as unknown as readonly FactAgent[]);
   } catch (err) {
-    return Err(new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+    return Err(
+      new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }),
+    );
   }
 }
 
@@ -249,6 +246,8 @@ export async function getDirectReports(
     );
     return Ok(rows as unknown as readonly FactAgent[]);
   } catch (err) {
-    return Err(new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }));
+    return Err(
+      new AgentCrudErrorImpl({ type: 'db_error', cause: err instanceof Error ? err : new Error(String(err)) }),
+    );
   }
 }

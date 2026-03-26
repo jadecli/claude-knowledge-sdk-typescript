@@ -17,7 +17,9 @@ export interface NeonClient {
   query<T>(sql: string, params?: readonly unknown[]): Promise<Result<readonly T[], Error>>;
 
   /** Execute multiple statements in a pseudo-transaction (Neon HTTP doesn't support real transactions). */
-  batch<T>(statements: ReadonlyArray<{ readonly sql: string; readonly params?: readonly unknown[] }>): Promise<Result<readonly T[], Error>>;
+  batch<T>(
+    statements: ReadonlyArray<{ readonly sql: string; readonly params?: readonly unknown[] }>,
+  ): Promise<Result<readonly T[], Error>>;
 }
 
 /**
@@ -40,7 +42,9 @@ export function connect(connectionString: ConnectionString): NeonClient {
       }
     },
 
-    async batch<T>(statements: ReadonlyArray<{ readonly sql: string; readonly params?: readonly unknown[] }>): Promise<Result<readonly T[], Error>> {
+    async batch<T>(
+      statements: ReadonlyArray<{ readonly sql: string; readonly params?: readonly unknown[] }>,
+    ): Promise<Result<readonly T[], Error>> {
       try {
         const allRows: T[] = [];
         for (const stmt of statements) {
