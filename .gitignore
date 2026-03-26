@@ -11,3 +11,5 @@ __pycache__/
 .venv/
 claude-otel-env.sh
 docker-compose.claude-otel.yml
+mnt/
+claude-knowledge-sdk-typescript.md
