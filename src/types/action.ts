@@ -169,12 +169,18 @@ export type ClaudeArgs = {
   readonly allowedTools?: ReadonlyArray<string>;
   /** --disallowedTools Tool1,Tool2 */
   readonly disallowedTools?: ReadonlyArray<string>;
-  /** --system-prompt "..." */
+  /** --system-prompt "..." — overrides the default Claude Code prompt entirely */
   readonly systemPrompt?: string;
+  /** --append-system-prompt "..." — appends to the default prompt (preserves context) */
+  readonly appendSystemPrompt?: string;
   /** --json-schema '{...}' for structured output */
   readonly jsonSchema?: Record<string, unknown>;
   /** --mcp-config (inline JSON or file path) — can be repeated */
   readonly mcpConfigs?: ReadonlyArray<string | McpConfigInline>;
+  /** --fallback-model <model-id> — model to use if primary is unavailable */
+  readonly fallbackModel?: string;
+  /** --resume <session-id> — continue a previous conversation */
+  readonly resume?: string;
 };
 
 /** Inline MCP config passed to --mcp-config as JSON */
@@ -226,7 +232,8 @@ export type WorkflowPreset =
   | 'scheduled-maintenance' // cron-based maintenance tasks
   | 'issue-triage' // auto-label and categorize issues
   | 'doc-sync' // update docs when API files change
-  | 'code-review-plugin'; // uses code-review@claude-code-plugins
+  | 'code-review-plugin' // uses code-review@claude-code-plugins
+  | 'base-action'; // low-level base action with custom prompt
 
 /** Common tool permission sets used in solutions */
 export type ToolPermissionSet =
@@ -269,6 +276,106 @@ export type SecurityReviewOutputs = {
   readonly 'results-file': string;
 };
 
+// ── Base Action Types (claude-code-base-action) ────────────────
+// The low-level composable action that claude-code-action builds on.
+// Source: github.com/anthropics/claude-code-base-action
+
+/** Inputs for anthropics/claude-code-base-action@beta */
+export type BaseActionInputs = ActionAuth &
+  CloudProvider & {
+    /** Direct prompt string (mutually exclusive with prompt_file) */
+    readonly prompt?: string;
+    /** Path to a file containing the prompt (mutually exclusive with prompt) */
+    readonly prompt_file?: string;
+    /** Claude Code settings as JSON string or path to settings JSON file */
+    readonly settings?: string;
+    /** Additional CLI arguments passed directly to Claude */
+    readonly claude_args?: string;
+    /** Enable Node.js dependency caching (default: false) */
+    readonly use_node_cache?: string;
+    /** Path to custom Claude Code executable */
+    readonly path_to_claude_code_executable?: string;
+    /** Path to custom Bun executable */
+    readonly path_to_bun_executable?: string;
+    /** Show full JSON output (default: false). WARNING: may expose secrets. */
+    readonly show_full_output?: string;
+    /** Newline-separated plugin names to install */
+    readonly plugins?: string;
+    /** Newline-separated plugin marketplace Git URLs */
+    readonly plugin_marketplaces?: string;
+  };
+
+/** Outputs from claude-code-base-action */
+export type BaseActionOutputs = {
+  /** 'success' or 'failure' */
+  readonly conclusion: 'success' | 'failure';
+  /** Path to JSON file with full Claude Code execution log (array of SDKMessage) */
+  readonly execution_file: string;
+  /** JSON string of structured output fields when --json-schema is provided */
+  readonly structured_output: string;
+  /** Session ID usable with --resume to continue the conversation */
+  readonly session_id: string;
+};
+
+// ── System Prompt Modes (from base-action internals) ───────────
+
+/**
+ * Three modes for system prompts in the base action:
+ * - override: completely replaces the default Claude Code prompt
+ * - append: extends the default prompt with additional instructions
+ * - default: uses the built-in Claude Code prompt as-is
+ */
+export type SystemPromptMode =
+  | { readonly mode: 'override'; readonly prompt: string }
+  | { readonly mode: 'append'; readonly appendText: string }
+  | { readonly mode: 'default' };
+
+// ── Claude Run Result (from base-action internals) ─────────────
+
+/** Execution result returned by the base action's SDK runner */
+export type ClaudeRunResult = {
+  /** Path to the execution log JSON file */
+  readonly executionFile?: string;
+  /** Session ID for --resume continuation */
+  readonly sessionId?: string;
+  /** Whether execution succeeded or failed */
+  readonly conclusion: 'success' | 'failure';
+  /** Structured output JSON string (when --json-schema was provided) */
+  readonly structuredOutput?: string;
+};
+
+// ── Provider Validation ────────────────────────────────────────
+
+/** Cloud provider with its required environment variables */
+export type ProviderRequirements = {
+  readonly provider: 'anthropic' | 'bedrock' | 'vertex' | 'foundry';
+  readonly requiredEnvVars: ReadonlyArray<string>;
+  readonly optionalEnvVars?: ReadonlyArray<string>;
+};
+
+/** Known provider requirements from base-action validate-env.ts */
+export const PROVIDER_REQUIREMENTS: ReadonlyArray<ProviderRequirements> = [
+  {
+    provider: 'anthropic',
+    requiredEnvVars: ['ANTHROPIC_API_KEY'],
+  },
+  {
+    provider: 'bedrock',
+    requiredEnvVars: ['AWS_REGION'],
+    optionalEnvVars: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'ANTHROPIC_BEDROCK_BASE_URL'],
+  },
+  {
+    provider: 'vertex',
+    requiredEnvVars: ['ANTHROPIC_VERTEX_PROJECT_ID', 'CLOUD_ML_REGION'],
+    optionalEnvVars: ['GOOGLE_APPLICATION_CREDENTIALS', 'ANTHROPIC_VERTEX_BASE_URL'],
+  },
+  {
+    provider: 'foundry',
+    requiredEnvVars: [],
+    optionalEnvVars: ['ANTHROPIC_FOUNDRY_RESOURCE', 'ANTHROPIC_FOUNDRY_BASE_URL'],
+  },
+];
+
 // ── MCP Tools Available in CI ──────────────────────────────────
 
 /** MCP tools auto-provisioned when additional_permissions: "actions: read" */
@@ -279,3 +386,29 @@ export type GitHubCIMcpTool =
 
 /** MCP tool for inline PR comments */
 export type GitHubInlineCommentTool = 'mcp__github_inline_comment__create_inline_comment';
+
+/** MCP tool for GitHub comment management (auto-provisioned in claude-code-action) */
+export type GitHubCommentMcpTool =
+  | 'mcp__github_comment__create_comment'
+  | 'mcp__github_comment__update_comment'
+  | 'mcp__github_comment__get_comment';
+
+// ── Plugin Validation ──────────────────────────────────────────
+
+/** Regex pattern for valid plugin names (from base-action install-plugins.ts) */
+export const PLUGIN_NAME_REGEX = /^[@a-zA-Z0-9_\-\/.]+$/;
+
+/** Validate a plugin name matches the expected pattern */
+export function isValidPluginName(name: string): boolean {
+  return PLUGIN_NAME_REGEX.test(name) && !name.includes('..');
+}
+
+/** Validate a marketplace URL is HTTPS and ends with .git */
+export function isValidMarketplaceUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && url.endsWith('.git');
+  } catch {
+    return false;
+  }
+}

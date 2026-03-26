@@ -9,6 +9,11 @@ import {
   generateWorkflow,
   generatePresetWorkflow,
   generateSecurityReviewWorkflow,
+  buildSystemPromptArgs,
+  buildBaseActionInputs,
+  isValidPluginName,
+  isValidMarketplaceUrl,
+  PROVIDER_REQUIREMENTS,
 } from '../index.js';
 
 describe('buildClaudeArgs', () => {
@@ -258,5 +263,123 @@ describe('generateSecurityReviewWorkflow', () => {
     });
     expect(yaml).toContain('claude-sonnet-4-6');
     expect(yaml).toContain('vendor,dist');
+  });
+});
+
+describe('buildClaudeArgs extended fields', () => {
+  it('handles appendSystemPrompt', () => {
+    const result = buildClaudeArgs({ appendSystemPrompt: 'Focus on security' });
+    expect(result).toContain('--append-system-prompt');
+    expect(result).toContain('Focus on security');
+  });
+
+  it('handles fallbackModel', () => {
+    const result = buildClaudeArgs({ fallbackModel: 'claude-haiku-4-5' });
+    expect(result).toBe('--fallback-model claude-haiku-4-5');
+  });
+
+  it('handles resume', () => {
+    const result = buildClaudeArgs({ resume: 'session-abc-123' });
+    expect(result).toBe('--resume session-abc-123');
+  });
+});
+
+describe('buildSystemPromptArgs', () => {
+  it('returns systemPrompt for override mode', () => {
+    const args = buildSystemPromptArgs({ mode: 'override', prompt: 'Custom prompt' });
+    expect(args.systemPrompt).toBe('Custom prompt');
+    expect(args.appendSystemPrompt).toBeUndefined();
+  });
+
+  it('returns appendSystemPrompt for append mode', () => {
+    const args = buildSystemPromptArgs({ mode: 'append', appendText: 'Extra instructions' });
+    expect(args.appendSystemPrompt).toBe('Extra instructions');
+    expect(args.systemPrompt).toBeUndefined();
+  });
+
+  it('returns empty object for default mode', () => {
+    const args = buildSystemPromptArgs({ mode: 'default' });
+    expect(args.systemPrompt).toBeUndefined();
+    expect(args.appendSystemPrompt).toBeUndefined();
+  });
+});
+
+describe('buildBaseActionInputs', () => {
+  it('builds minimal base action inputs', () => {
+    const inputs = buildBaseActionInputs({
+      prompt: 'Do something',
+      oauthToken: '${{ secrets.TOKEN }}',
+    });
+    expect(inputs.claude_code_oauth_token).toBe('${{ secrets.TOKEN }}');
+    expect(inputs.prompt).toBe('Do something');
+  });
+
+  it('builds with plugins', () => {
+    const inputs = buildBaseActionInputs({
+      oauthToken: '${{ secrets.TOKEN }}',
+      promptFile: '/tmp/prompt.txt',
+      plugins: ['code-review@claude-code-plugins', 'security@custom'],
+      pluginMarketplaces: ['https://github.com/anthropics/claude-code.git'],
+    });
+    expect(inputs.prompt_file).toBe('/tmp/prompt.txt');
+    expect(inputs.plugins).toBe('code-review@claude-code-plugins\nsecurity@custom');
+    expect(inputs.plugin_marketplaces).toBe('https://github.com/anthropics/claude-code.git');
+  });
+});
+
+describe('isValidPluginName', () => {
+  it('accepts valid plugin names', () => {
+    expect(isValidPluginName('code-review@claude-code-plugins')).toBe(true);
+    expect(isValidPluginName('@anthropic/plugin')).toBe(true);
+    expect(isValidPluginName('simple_plugin')).toBe(true);
+  });
+
+  it('rejects invalid plugin names', () => {
+    expect(isValidPluginName('plugin with spaces')).toBe(false);
+    expect(isValidPluginName('../path-traversal')).toBe(false);
+    expect(isValidPluginName('')).toBe(false);
+  });
+});
+
+describe('isValidMarketplaceUrl', () => {
+  it('accepts valid marketplace URLs', () => {
+    expect(isValidMarketplaceUrl('https://github.com/anthropics/claude-code.git')).toBe(true);
+  });
+
+  it('rejects non-HTTPS URLs', () => {
+    expect(isValidMarketplaceUrl('http://github.com/repo.git')).toBe(false);
+  });
+
+  it('rejects URLs not ending in .git', () => {
+    expect(isValidMarketplaceUrl('https://github.com/repo')).toBe(false);
+  });
+
+  it('rejects invalid URLs', () => {
+    expect(isValidMarketplaceUrl('not a url')).toBe(false);
+  });
+});
+
+describe('PROVIDER_REQUIREMENTS', () => {
+  it('has 4 providers', () => {
+    expect(PROVIDER_REQUIREMENTS).toHaveLength(4);
+    const names = PROVIDER_REQUIREMENTS.map((p) => p.provider);
+    expect(names).toContain('anthropic');
+    expect(names).toContain('bedrock');
+    expect(names).toContain('vertex');
+    expect(names).toContain('foundry');
+  });
+
+  it('bedrock requires AWS_REGION', () => {
+    const bedrock = PROVIDER_REQUIREMENTS.find((p) => p.provider === 'bedrock');
+    expect(bedrock?.requiredEnvVars).toContain('AWS_REGION');
+  });
+});
+
+describe('base-action preset', () => {
+  it('generates base-action workflow with correct action ref', () => {
+    const yaml = generatePresetWorkflow('base-action');
+    expect(yaml).toContain('claude-code-base-action@beta');
+    expect(yaml).toContain('workflow_dispatch:');
+    expect(yaml).toContain('CLAUDE_CODE_OAUTH_TOKEN');
   });
 });

@@ -126,7 +126,14 @@ export type {
   SecurityReviewOutputs,
   GitHubCIMcpTool,
   GitHubInlineCommentTool,
+  GitHubCommentMcpTool,
+  BaseActionInputs,
+  BaseActionOutputs,
+  SystemPromptMode,
+  ClaudeRunResult,
+  ProviderRequirements,
 } from './types/action.js';
+export { PROVIDER_REQUIREMENTS, PLUGIN_NAME_REGEX, isValidPluginName, isValidMarketplaceUrl } from './types/action.js';
 
 // ── Action Builders ────────────────────────────────────────────
 export {
@@ -136,9 +143,47 @@ export {
   mcpServerPython,
   promptContext,
   jsonSchema,
+  buildSystemPromptArgs,
+  buildBaseActionInputs,
 } from './action/directives.js';
 export { generateWorkflow, generatePresetWorkflow, generateSecurityReviewWorkflow } from './action/workflow.js';
 export type { WorkflowConfig, WorkflowTrigger } from './action/workflow.js';
+
+// ── MCPB Desktop Extension Types ───────────────────────────────
+export type {
+  McpbManifest,
+  McpbAuthor,
+  McpbRepository,
+  McpbServerConfig,
+  McpbServerType,
+  McpbMcpConfig,
+  McpbPlatform,
+  McpbPlatformOverride,
+  McpbToolDeclaration,
+  McpbPromptDeclaration,
+  McpbCompatibility,
+  McpbUserConfigField,
+  McpbArchiveLayout,
+} from './types/extension.js';
+
+// ── MCPB Manifest Builder ──────────────────────────────────────
+export { buildManifest, ManifestBuilder } from './extension/manifest.js';
+export type { ManifestBuilderOptions } from './extension/manifest.js';
+
+// ── Harness & Engineering Patterns ─────────────────────────────
+export type {
+  ToolDesignPattern,
+  ToolQualityDimension,
+  AnnotatedToolDefinition,
+  HarnessPhase,
+  HarnessConfig,
+  ResearchScalingTier,
+  CompressionMetrics,
+  ContextEngineeringLayer,
+  PermissionMode,
+  PermissionRule,
+} from './types/harness.js';
+export { DEFAULT_HARNESS_CONFIG, RESEARCH_SCALING_TIERS, MEASURED_TOKEN_REDUCTIONS } from './types/harness.js';
 
 // ── Monitoring ──────────────────────────────────────────────────
 export {

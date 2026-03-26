@@ -38,6 +38,8 @@ export type WorkflowConfig = {
   readonly ifCondition?: string;
   readonly fetchDepth?: number;
   readonly checkoutRef?: string;
+  /** Action reference (default: "anthropics/claude-code-action@v1") */
+  readonly actionRef?: string;
 };
 
 // ── YAML builder (no deps, just strings) ───────────────────────
@@ -218,7 +220,7 @@ export function generateWorkflow(config: WorkflowConfig): string {
   lines.push('');
   lines.push('      - name: Run Claude Code');
   lines.push('        id: claude');
-  lines.push('        uses: anthropics/claude-code-action@v1');
+  lines.push(`        uses: ${config.actionRef ?? 'anthropics/claude-code-action@v1'}`);
   lines.push('        with:');
   lines.push(renderActionInputs(config.inputs, 10));
 
@@ -435,6 +437,17 @@ export function generatePresetWorkflow(preset: WorkflowPreset, overrides?: Parti
         prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}',
       },
       fetchDepth: 0,
+    },
+    'base-action': {
+      name: 'Claude Code (Base Action)',
+      triggers: [{ type: 'workflow_dispatch' }],
+      permissions: { contents: 'write', 'id-token': 'write' },
+      inputs: {
+        claude_code_oauth_token: authToken,
+        prompt: 'Analyze this repository and generate a summary of the codebase.',
+      },
+      jobName: 'claude',
+      actionRef: 'anthropics/claude-code-base-action@beta',
     },
   };
 
