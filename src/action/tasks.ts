@@ -18,6 +18,7 @@
  */
 
 import type { TodoItem, TodoWriteInput, AgentInput } from '../types/agent.js';
+import type { SessionId, AgentId } from '../types/core.js';
 
 // ── Todo Builders ──────────────────────────────────────────────
 
@@ -146,12 +147,12 @@ export function buildImplementationAgent(task: string, instructions: string): Ag
 // ── Session Persistence Paths ──────────────────────────────────
 
 /** Get the todo persistence file path for a session */
-export function todoFilePath(sessionId: string): string {
+export function todoFilePath(sessionId: SessionId): string {
   return `~/.claude/todos/${sessionId}.json`;
 }
 
 /** Get the todo persistence file path for a subagent within a session */
-export function subagentTodoFilePath(sessionId: string, agentId: string): string {
+export function subagentTodoFilePath(sessionId: SessionId, agentId: AgentId): string {
   return `~/.claude/todos/${sessionId}-agent-${agentId}.json`;
 }
 
@@ -162,15 +163,24 @@ function toActiveForm(content: string): string {
   const first = content.split(' ')[0];
   if (first === undefined) return content;
 
+  const lower = first.toLowerCase();
+  const rest = content.slice(first.length);
+
   // Common verb transformations
-  if (first.endsWith('e') && !first.endsWith('ee')) {
-    return first.slice(0, -1) + 'ing' + content.slice(first.length);
+  // 1. Drop silent e: "Create" → "Creating", "Write" → "Writing"
+  if (lower.endsWith('e') && !lower.endsWith('ee')) {
+    return first.slice(0, -1) + 'ing' + rest;
   }
-  return first + 'ing' + content.slice(first.length);
+  // 2. Double final consonant for CVC verbs: "Run" → "Running", "Set" → "Setting"
+  // Exclude w, x, y — these never double (fix→fixing, show→showing)
+  const cvcPattern = /^[a-z]*[aeiou][bcdfghjklmnpqrstvz]$/i;
+  if (cvcPattern.test(lower) && lower.length >= 3) {
+    return first + first[first.length - 1] + 'ing' + rest;
+  }
+  // 3. Default: just append -ing
+  return first + 'ing' + rest;
 }
 
-let todoCounter = 0;
 function generateTodoId(): string {
-  todoCounter++;
-  return String(todoCounter);
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }

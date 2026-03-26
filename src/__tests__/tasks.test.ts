@@ -10,6 +10,8 @@ import {
   buildImplementationAgent,
   todoFilePath,
   subagentTodoFilePath,
+  SessionId,
+  AgentId,
 } from '../index.js';
 
 describe('todo', () => {
@@ -31,6 +33,13 @@ describe('todo', () => {
   it('handles verbs ending in e', () => {
     const t = todo('Create the module', { status: 'in_progress' });
     expect(t.activeForm).toBe('Creating the module');
+  });
+
+  it('handles consonant doubling for CVC verbs', () => {
+    const run = todo('Run the tests', { status: 'in_progress' });
+    expect(run.activeForm).toBe('Running the tests');
+    const set = todo('Set the config', { status: 'in_progress' });
+    expect(set.activeForm).toBe('Setting the config');
   });
 
   it('respects explicit activeForm override', () => {
@@ -165,11 +174,13 @@ describe('buildImplementationAgent', () => {
 });
 
 describe('todoFilePath / subagentTodoFilePath', () => {
-  it('returns session todo path', () => {
-    expect(todoFilePath('sess-123')).toBe('~/.claude/todos/sess-123.json');
+  it('returns session todo path with branded SessionId', () => {
+    expect(todoFilePath(SessionId('sess-123'))).toBe('~/.claude/todos/sess-123.json');
   });
 
-  it('returns subagent todo path', () => {
-    expect(subagentTodoFilePath('sess-123', 'agent-456')).toBe('~/.claude/todos/sess-123-agent-agent-456.json');
+  it('returns subagent todo path with branded types', () => {
+    expect(subagentTodoFilePath(SessionId('sess-123'), AgentId('agent-456'))).toBe(
+      '~/.claude/todos/sess-123-agent-agent-456.json',
+    );
   });
 });
