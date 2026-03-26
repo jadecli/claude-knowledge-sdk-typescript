@@ -1,0 +1,32 @@
+name: Release Doctor
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required secrets
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: |
+          errors=0
+          if [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "::error::Missing CLAUDE_CODE_OAUTH_TOKEN secret"
+            echo "Run 'claude setup-token' locally and add the token to Settings > Secrets > Actions"
+            errors=$((errors + 1))
+          fi
+          if [ -z "$CLAUDE_API_KEY" ]; then
+            echo "::error::Missing CLAUDE_API_KEY secret"
+            echo "Add your Anthropic API key to Settings > Secrets > Actions"
+            errors=$((errors + 1))
+          fi
+          if [ $errors -gt 0 ]; then
+            echo "::warning::$errors secret(s) missing. Claude review and security workflows will fail."
+            exit 1
+          fi
+          echo "All required secrets are configured."
