@@ -69,12 +69,7 @@ export { connect } from './db/neon-client.js';
 export type { NeonClient } from './db/neon-client.js';
 
 // ── SCD Type 2 Engine ───────────────────────────────────────────
-export {
-  insertWithEffectiveDating,
-  expireRow,
-  getAsOf,
-  getHistory,
-} from './db/scd.js';
+export { insertWithEffectiveDating, expireRow, getAsOf, getHistory, validateIdentifier } from './db/scd.js';
 
 // ── Agent CRUD ──────────────────────────────────────────────────
 export {
