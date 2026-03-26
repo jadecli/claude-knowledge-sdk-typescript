@@ -30,6 +30,7 @@ jobs:
             actions: read
           claude_args: |
             --allowedTools "Read,Glob,Grep,Bash(npm run *),Bash(npx *),Bash(gh pr *),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh run *),mcp__github_inline_comment__create_inline_comment"
+          review_on_open: true
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -77,3 +78,17 @@ jobs:
 
             If ALL blocking checks pass and CI is green, explicitly state: "This PR meets the Boris Cherny TypeScript standard. Approved."
             If ANY blocking check fails, explicitly state what must be fixed before merge.
+
+      - name: Enforce review verdict
+        if: always() && steps.claude-review.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if Claude posted a REQUEST_CHANGES review
+          LATEST_REVIEW=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/reviews \
+            --jq '[.[] | select(.user.login == "github-actions[bot]" or .user.type == "Bot")] | last | .state')
+          if [ "$LATEST_REVIEW" = "CHANGES_REQUESTED" ]; then
+            echo "::error::Claude Code Review requested changes. Fix blocking issues before merge."
+            exit 1
+          fi
+          echo "Review passed: $LATEST_REVIEW"

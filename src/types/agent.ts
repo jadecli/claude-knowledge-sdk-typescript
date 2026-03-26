@@ -36,17 +36,17 @@ export type AgentDefinition = {
 
 export type AgentMcpServerSpec =
   | string // server name reference
-  | Record<string, McpServerConfig>;
+  | Readonly<Record<string, McpServerConfig>>;
 
 export type McpServerConfig =
   | {
       readonly type: 'stdio';
       readonly command: string;
       readonly args?: ReadonlyArray<string>;
-      readonly env?: Record<string, string>;
+      readonly env?: Readonly<Record<string, string>>;
     }
-  | { readonly type: 'sse'; readonly url: string; readonly headers?: Record<string, string> }
-  | { readonly type: 'http'; readonly url: string; readonly headers?: Record<string, string> }
+  | { readonly type: 'sse'; readonly url: string; readonly headers?: Readonly<Record<string, string>> }
+  | { readonly type: 'http'; readonly url: string; readonly headers?: Readonly<Record<string, string>> }
   | { readonly type: 'sdk' /* in-process MCP server */ };
 
 // ── Query Options (matches SDK Options) ─────────────────────────
@@ -251,6 +251,8 @@ export const TOOL_PERMISSIONS: ReadonlyArray<ToolPermission> = [
   { tool: 'ListMcpResourcesTool', requiresPermission: false },
   { tool: 'ReadMcpResourceTool', requiresPermission: false },
   { tool: 'EnterPlanMode', requiresPermission: false },
+  // ExitPlanMode requires permission because it presents the plan for user approval —
+  // entering plan mode is free, but exiting commits to an implementation approach
   { tool: 'ExitPlanMode', requiresPermission: true },
   { tool: 'EnterWorktree', requiresPermission: false },
   { tool: 'ExitWorktree', requiresPermission: false },
@@ -303,7 +305,11 @@ export type ToolCategory =
 // ── TodoWrite Types ──────────────────────────────────────────
 // SDK exports the 3-field version; runtime payloads include id + priority
 
-/** SDK-level TodoWrite input (3 required fields) */
+/**
+ * SDK-level TodoWrite input (3 required fields).
+ * activeForm is the present-continuous description shown during execution
+ * (e.g., "Running tests" vs content "Run tests"). Required by Claude Code runtime.
+ */
 export type TodoWriteInput = {
   readonly todos: ReadonlyArray<{
     readonly content: string;
@@ -338,7 +344,7 @@ export type TodoItem = {
   readonly activeForm: string;
 };
 
-// ── Agent Tool Input (11 fields) ─────────────────────────────
+// ── Agent Tool Input (10 fields) ─────────────────────────────
 // Input schema for the Agent built-in tool
 
 export type AgentInput = {

@@ -56,11 +56,11 @@ Include the Linear issue ID in commit footers to auto-transition issues:
 ```
 feat(types): add LSP tool types
 
-Closes JADE-38
+Closes JAD-38
 ```
 
 ## Team and Workspace
 
 - Workspace: jadecli
-- Team: Jade Engineering
-- Issue prefix: JADE
+- Team: Jadecli
+- Issue prefix: JAD
