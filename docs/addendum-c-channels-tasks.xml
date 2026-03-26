@@ -1,0 +1,409 @@
+<!--
+  ADDENDUM C: CLAUDE CODE CHANNELS × JADECLI KNOWLEDGE WORKERS
+
+  Integrates Claude Code Channels (MCP push-event servers) with the
+  jadecli knowledge-workers ecosystem (~45 agents, 12 departments,
+  Neon Postgres backing store). Delivers:
+    • Dedicated Slack channel per knowledge-worker agent
+    • Custom MCP server plugin routing Slack ↔ Claude sessions
+    • Deterministic hooks suite (persona injection, tool gating, audit)
+    • Neon schema extensions for channel routing + audit trail
+    • Headless/CI automation and remote-control debugging
+
+  Workspace: jadecli.slack.com | GitHub: jadecli | Neon: cool-salad-93957281
+  Domain: jadecli.app | Contact: alex@jadecli.com | Linear: JAD-*
+
+  TOTAL NEW TASKS: 20 (IDs 113-132)
+  PHASES: 22-25
+  DEPENDENCY: Requires addendum 4 (tasks 083-112) to be complete
+-->
+
+<execution_rules_5>
+  <!-- Rules 55-65: Channels + Knowledge Workers integration -->
+  <rule id="55">Every MCP server file under packages/jade-slack-channel/ MUST declare the `claude/channel` capability in its manifest and export a `channelCapability` const typed as `{ readonly name: "claude/channel"; readonly version: "2025-01-01" }`.</rule>
+  <rule id="56">All Slack event payloads received by the channel plugin MUST be validated against a Zod schema before dispatch. Raw Slack JSON never reaches agent session code — only branded `SlackChannelEvent` discriminated unions cross the boundary.</rule>
+  <rule id="57">Hook scripts (SessionStart, PreToolUse, PostToolUse, Stop) are plain executables under `hooks/` returning JSON to stdout. They MUST exit 0 on success, exit 2 to block a tool call (PreToolUse only), and never throw — all errors are `Result&lt;T, HookError&gt;`.</rule>
+  <rule id="58">The sender allowlist for each agent channel is stored in Neon (`channel_routing.allowed_senders jsonb`) and cached in-process with a 60-second TTL. Messages from senders not on the allowlist are silently dropped and audit-logged with reason `"sender_rejected"`.</rule>
+  <rule id="59">Neon schema migrations for this addendum live in `packages/jade-knowledge-workers/src/migrations/` and follow the existing `NNNN_description.sql` naming. Each migration is idempotent (uses `IF NOT EXISTS` / `CREATE OR REPLACE`).</rule>
+  <rule id="60">Audit log rows (`agent_audit_log`) are append-only. No UPDATE or DELETE statements may target this table. The table uses `timestamptz` for `created_at` and includes `session_id`, `agent_id`, `event_type`, `payload jsonb`, and `channel_id`.</rule>
+  <rule id="61">Permission relay payloads (`notifications/claude/permissionRequest`) MUST include `meta.agent_id`, `meta.department`, and `meta.source_channel` so the Slack approver sees full context before granting tool use.</rule>
+  <rule id="62">Headless mode (`--headless` flag or `JADECLI_HEADLESS=1` env) skips all interactive prompts, reads the sender allowlist from Neon, and auto-approves tools listed in the agent's `allowed_tools` column. Tools not on the list are denied with exit 2.</rule>
+  <rule id="63">Every new exported function MUST have a corresponding vitest test. Channel plugin tests use `msw` (Mock Service Worker) to stub Slack API calls; hook tests use fixture JSON files under `__fixtures__/`.</rule>
+  <rule id="64">Commit messages for this addendum use scope `channels` — e.g., `feat(channels): add Slack channel MCP server skeleton`. Linear references use `Closes JAD-NNN` in the commit footer.</rule>
+  <rule id="65">The ship report (task 132) requires ALL prior tasks 113-131 to pass CI (typecheck + build + test + lint) on a single PR before the report is generated. The report is a Linear document, not a markdown file in the repo.</rule>
+</execution_rules_5>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     PHASE 22: SLACK CHANNEL PLUGIN (MCP Server bridging Slack ↔ Claude)
+     Tasks 113-118 | 6 tasks | Priority: critical/high
+     ═══════════════════════════════════════════════════════════════════════════ -->
+
+<task id="113" priority="critical" status="pending">
+  <content>
+    Create jade-slack-channel package skeleton with MCP channel capability.
+
+    Initialize `packages/jade-slack-channel/` as a new workspace package:
+
+    1. `package.json` — name `@jadecli/jade-slack-channel`, peer deps on `@modelcontextprotocol/sdk ^1.12.0`, `@slack/web-api ^7.8.0`, `@slack/socket-mode ^2.0.0`, `zod ^3.24.0`. Add `"bin": { "jade-slack-channel": "./dist/cli.js" }`.
+
+    2. `tsconfig.json` — extends root, strict: true, noUncheckedIndexedAccess: true.
+
+    3. `src/capability.ts`:
+       ```typescript
+       export const CHANNEL_CAPABILITY = {
+         name: "claude/channel",
+         version: "2025-01-01",
+       } as const satisfies { readonly name: "claude/channel"; readonly version: string };
+       ```
+
+    4. `src/types.ts` — branded types: SlackChannelId, SlackUserId, SlackThreadTs, ChannelRouteId. Discriminated union `SlackChannelEvent = SlackMessageEvent | SlackReactionEvent | SlackThreadReplyEvent | SlackAppMentionEvent` with `readonly kind:` literal discriminant.
+
+    5. Add package to root tsconfig references and root package.json workspaces.
+
+    Commit: `feat(channels): scaffold jade-slack-channel package with MCP channel capability`
+    Linear: Closes JAD-220
+  </content>
+  <activeForm>Scaffolding jade-slack-channel package with channel capability declaration</activeForm>
+</task>
+
+<task id="114" priority="critical" status="pending">
+  <content>
+    Implement Slack event ingestion and Zod validation layer.
+
+    In `packages/jade-slack-channel/src/`:
+
+    1. `schemas.ts` — Zod schemas for: slackMessageSchema, slackReactionSchema, slackAppMentionSchema, slackThreadReplySchema. All schemas produce branded types from task 113.
+
+    2. `event-parser.ts`:
+       `export function parseSlackEvent(raw: unknown): Result&lt;SlackChannelEvent, SlackParseError&gt;`
+       Dispatches on raw.type/raw.subtype, returns Result.ok() or Result.err() with structured SlackParseError.
+
+    3. `__tests__/event-parser.test.ts` — at least 12 tests: valid events, missing fields, malformed IDs, null/undefined/empty inputs.
+
+    Commit: `feat(channels): add Slack event Zod schemas and parser with Result monad`
+    Linear: Closes JAD-221
+  </content>
+  <activeForm>Implementing Slack event Zod validation and parser returning Result monad</activeForm>
+</task>
+
+<task id="115" priority="critical" status="pending">
+  <content>
+    Build MCP server core with channel notification dispatch.
+
+    1. `server.ts` — `JadeSlackChannelServer` class:
+       - Constructor takes ServerConfig { slackBotToken, slackAppToken, neonConnectionString, senderAllowlistTtlMs? }
+       - Registers claude/channel capability
+       - Implements notifications/claude/channel push with meta: { agent_id, department, source_channel }
+       - Exposes MCP tools: slack_reply(channel_id, thread_ts, text), slack_react(channel_id, ts, emoji), slack_list_channels()
+
+    2. `router.ts` — ChannelRouter class:
+       routeToAgent(channelId) returns AgentRouteInfo { agentId, department, sessionConfig }
+       isAllowedSender(channelId, userId) checks Neon with 60s TTL cache
+
+    3. `__tests__/server.test.ts` — test capability registration, notification shape, tool schemas.
+
+    Commit: `feat(channels): implement MCP server with channel notifications and routing`
+    Linear: Closes JAD-222
+  </content>
+  <activeForm>Building MCP channel server with notification dispatch and agent routing</activeForm>
+</task>
+
+<task id="116" priority="high" status="pending">
+  <content>
+    Implement sender allowlist with Neon-backed cache.
+
+    1. `allowlist.ts` — SenderAllowlist class:
+       check(channelId, userId) → Result&lt;AllowlistDecision&gt;
+       AllowlistDecision = { allowed: true, reason: "on_list" } | { allowed: false, reason: "sender_rejected" | "channel_not_found" | "allowlist_empty" }
+       In-memory Map cache keyed by SlackChannelId, entries expire after ttlMs.
+       AllowlistCacheStats tracks hit/miss/eviction counts.
+
+    2. `__tests__/allowlist.test.ts` — 8+ tests: allowed/rejected/unknown channel, cache hit/miss/expiry, empty allowlist, concurrent request coalescing.
+
+    Commit: `feat(channels): add sender allowlist with TTL cache backed by Neon`
+    Linear: Closes JAD-223
+  </content>
+  <activeForm>Implementing sender allowlist with Neon-backed TTL cache</activeForm>
+</task>
+
+<task id="117" priority="high" status="pending">
+  <content>
+    Build permission relay bridge for remote tool approval via Slack.
+
+    1. `permission-relay.ts` — PermissionRelay class:
+       requestApproval(request) → Result&lt;PermissionRelayResponse&gt;
+       handleSlackAction(action) handles Block Kit button clicks
+       Posts Slack Block Kit message with agent name, department, tool name, sanitized input preview, Approve/Deny buttons.
+       Waits up to 120s for response, returns timeout if none.
+
+    2. Wire into MCP server: intercept notifications/claude/permissionRequest, delegate to PermissionRelay.
+
+    3. `__tests__/permission-relay.test.ts` — approve flow, deny flow, timeout, malformed action.
+
+    Commit: `feat(channels): add permission relay bridge for Slack-based tool approval`
+    Linear: Closes JAD-224
+  </content>
+  <activeForm>Building permission relay bridge for remote tool approval through Slack</activeForm>
+</task>
+
+<task id="118" priority="high" status="pending">
+  <content>
+    Add CLI entry point and plugin manifest for jade-slack-channel.
+
+    1. `src/cli.ts` — parses env vars (SLACK_BOT_TOKEN, SLACK_APP_TOKEN, NEON_CONNECTION_STRING, JADECLI_HEADLESS), validates, instantiates server, connects Socket Mode, starts MCP stdio transport. Graceful shutdown on SIGINT/SIGTERM.
+
+    2. `.claude-plugin/plugin.json` — name, version, description, capabilities: ["claude/channel"], entrypoint.
+
+    3. `__tests__/cli.test.ts` — missing env var exits 1, valid env vars create server.
+
+    Commit: `feat(channels): add CLI entry point and plugin manifest for Slack channel server`
+    Linear: Closes JAD-225
+  </content>
+  <activeForm>Adding CLI entry point and Claude Code plugin manifest for Slack channel server</activeForm>
+</task>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     PHASE 23: HOOKS SUITE (SessionStart, PreToolUse, PostToolUse, Stop)
+     Tasks 119-123 | 5 tasks | Priority: critical/high/medium
+     ═══════════════════════════════════════════════════════════════════════════ -->
+
+<task id="119" priority="critical" status="pending">
+  <content>
+    Create SessionStart hook for agent persona injection.
+
+    1. `hooks/session-start.ts` — reads CLAUDE_SESSION_ID and JADE_AGENT_ID from env, queries Neon for agent record (name, department, system_prompt, persona_traits, allowed_tools), assembles systemPromptPrefix from persona traits and department instructions. Outputs JSON with systemPromptPrefix, agentId, department, persona, allowedTools. Exit 0 on success, exit 1 on error.
+
+    2. `hooks/types.ts` — shared hook types: HookExitCode, HookError, PreToolUseOutput, PostToolUseOutput, StopOutput.
+
+    3. `.claude/settings.json` hook registration for SessionStart.
+
+    4. `hooks/__tests__/session-start.test.ts` — persona assembly, missing agent ID, DB failure.
+
+    Commit: `feat(channels): add SessionStart hook for agent persona injection from Neon`
+    Linear: Closes JAD-226
+  </content>
+  <activeForm>Creating SessionStart hook that injects agent persona from Neon into Claude session</activeForm>
+</task>
+
+<task id="120" priority="critical" status="pending">
+  <content>
+    Implement PreToolUse hook for agent-scoped tool gating.
+
+    1. `hooks/pre-tool-use.ts` — reads stdin { tool_name, tool_input, session_id }, reads JADE_AGENT_ID from env, loads allowed_tools from Neon (60s TTL cache). Decision: allowed tool → exit 0; disallowed + headless → exit 2 (block); disallowed + interactive → exit 0 (defer to Claude prompt). Own channel tools (mcp__jade-slack-channel__*) always allowed.
+
+    2. `__tests__/pre-tool-use.test.ts` — 10+ tests covering all decision paths, cache, error cases.
+
+    Commit: `feat(channels): add PreToolUse hook for agent-scoped tool gating`
+    Linear: Closes JAD-227
+  </content>
+  <activeForm>Implementing PreToolUse hook for tool gating based on agent allowed-tools list</activeForm>
+</task>
+
+<task id="121" priority="high" status="pending">
+  <content>
+    Implement PostToolUse hook for audit logging.
+
+    1. `hooks/post-tool-use.ts` — reads stdin { tool_name, tool_input, tool_output, duration_ms, session_id }, writes to agent_audit_log table. tool_input_hash is SHA-256. payload contains tool_name, duration_ms, output_size_bytes, success — never raw output. Fire-and-forget: DB failure logs to stderr but still exits 0.
+
+    2. `__tests__/post-tool-use.test.ts` — successful write, DB failure resilience, hash correctness, payload sanitization.
+
+    Commit: `feat(channels): add PostToolUse hook for audit logging to Neon`
+    Linear: Closes JAD-228
+  </content>
+  <activeForm>Implementing PostToolUse hook for append-only audit logging to Neon</activeForm>
+</task>
+
+<task id="122" priority="high" status="pending">
+  <content>
+    Implement Stop hook for session summary and cost tracking.
+
+    1. `hooks/stop.ts` — reads stdin { session_id, stop_reason, usage }, calculates cost via existing calculateCost(), writes to agent_session_log, posts summary to Slack channel if one exists. Exit 0 always.
+
+    2. `__tests__/stop.test.ts` — cost calculation, summary formatting, DB write, Slack post (mocked), error resilience.
+
+    Commit: `feat(channels): add Stop hook for session summary and cost tracking`
+    Linear: Closes JAD-229
+  </content>
+  <activeForm>Implementing Stop hook for session summary generation and cost tracking</activeForm>
+</task>
+
+<task id="123" priority="medium" status="pending">
+  <content>
+    Create hooks settings generator and integration test suite.
+
+    1. `src/hooks-config.ts` — generateHooksSettings(options) returns Claude Code settings.json hooks schema with all 4 hooks registered with configurable timeouts.
+
+    2. `__tests__/hooks-integration.test.ts` — end-to-end: spawn each hook as child process, pipe test JSON to stdin, assert stdout/exit codes. Full lifecycle: SessionStart → PreToolUse (allow) → PostToolUse → Stop.
+
+    3. Add "hooks:build" script to package.json.
+
+    Commit: `feat(channels): add hooks settings generator and integration test suite`
+    Linear: Closes JAD-230
+  </content>
+  <activeForm>Creating hooks settings generator and running full lifecycle integration tests</activeForm>
+</task>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     PHASE 24: NEON SCHEMA + AUDIT (channel routing, audit log, metrics)
+     Tasks 124-127 | 4 tasks | Priority: critical/high/medium
+     ═══════════════════════════════════════════════════════════════════════════ -->
+
+<task id="124" priority="critical" status="pending">
+  <content>
+    Add Neon migration for channel_routing table.
+
+    1. `migrations/0005_channel_routing.sql` — channel_routing table with: id, agent_id (FK), slack_channel_id (unique), slack_channel_name, allowed_senders (jsonb), session_config (jsonb), is_active, timestamps. Indexes on slack_channel_id and agent_id where active. Auto-update trigger for updated_at.
+
+    2. CRUD functions in `src/channel-routing.ts`: createChannelRoute, getChannelRouteBySlackChannel, getChannelRouteByAgent, updateChannelRoute, deactivateChannelRoute.
+
+    3. `__tests__/channel-routing.test.ts`.
+
+    Commit: `feat(channels): add Neon migration and CRUD for channel_routing table`
+    Linear: Closes JAD-231
+  </content>
+  <activeForm>Adding Neon migration for channel_routing table with CRUD functions</activeForm>
+</task>
+
+<task id="125" priority="critical" status="pending">
+  <content>
+    Add Neon migration for agent_audit_log table.
+
+    1. `migrations/0006_agent_audit_log.sql` — append-only table: id (bigserial), agent_id, session_id, channel_id, event_type (constrained enum), tool_name, tool_input_hash, duration_ms, payload (jsonb), created_at. Indexes on agent+created, session, event_type. REVOKE UPDATE,DELETE FROM PUBLIC.
+
+    2. Query functions in `src/audit-log.ts`: appendAuditEntry, queryAuditLog(filter), getAgentAuditSummary(agentId, since).
+
+    3. `__tests__/audit-log.test.ts`.
+
+    Commit: `feat(channels): add Neon migration and query functions for agent_audit_log`
+    Linear: Closes JAD-232
+  </content>
+  <activeForm>Adding Neon migration for append-only agent_audit_log table</activeForm>
+</task>
+
+<task id="126" priority="high" status="pending">
+  <content>
+    Add Neon migration for agent_session_log and metrics views.
+
+    1. `migrations/0007_agent_session_log.sql` — session log table + materialized view agent_daily_metrics (session_count, total_tokens, total_cost_usd, avg_tokens_per_session per agent per day).
+
+    2. Functions in `src/session-log.ts`: insertSessionLog, getAgentDailyMetrics(agentId, from, to), refreshDailyMetrics.
+
+    3. `__tests__/session-log.test.ts`.
+
+    Commit: `feat(channels): add session log table and daily metrics materialized view`
+    Linear: Closes JAD-233
+  </content>
+  <activeForm>Adding Neon migration for agent_session_log and daily metrics materialized view</activeForm>
+</task>
+
+<task id="127" priority="medium" status="pending">
+  <content>
+    Extend agents table with channel and hook configuration columns.
+
+    1. `migrations/0008_agents_channel_columns.sql` — ALTER TABLE agents ADD COLUMN: persona_traits (jsonb), allowed_tools (jsonb), hook_overrides (jsonb), slack_channel_name (text), is_channel_enabled (boolean). Backfill allowed_tools by department.
+
+    2. Update Agent type in types.ts with new fields.
+
+    3. Update CRUD functions in agents.ts to include new columns.
+
+    4. `__tests__/agents-channel.test.ts`.
+
+    Commit: `feat(channels): extend agents table with channel config and allowed_tools columns`
+    Linear: Closes JAD-234
+  </content>
+  <activeForm>Extending agents table with persona traits, allowed tools, and channel configuration</activeForm>
+</task>
+
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     PHASE 25: AUTOMATION & REMOTE (headless, scheduled, remote control, ship)
+     Tasks 128-132 | 5 tasks | Priority: high/medium
+     ═══════════════════════════════════════════════════════════════════════════ -->
+
+<task id="128" priority="high" status="pending">
+  <content>
+    Implement headless mode for CI and scheduled automation.
+
+    1. `src/headless.ts` — HeadlessController class: isHeadless() checks JADECLI_HEADLESS=1, autoApprove(toolName, agentId) checks agent's allowed_tools from Neon, getSessionFlags() returns CLI flags for spawning headless sessions.
+
+    2. Update cli.ts to read JADECLI_HEADLESS and pass HeadlessConfig.
+
+    3. `__tests__/headless.test.ts`.
+
+    Commit: `feat(channels): add headless mode controller for CI and scheduled automation`
+    Linear: Closes JAD-235
+  </content>
+  <activeForm>Implementing headless mode controller for CI and scheduled agent automation</activeForm>
+</task>
+
+<task id="129" priority="high" status="pending">
+  <content>
+    Create scheduled task definitions for agent health checks and metrics refresh.
+
+    1. `src/scheduled-tasks.ts` — generateScheduledTaskDefinitions(agents) returns:
+       - agent-health-check (*/15 * * * *): ping channels, verify Neon, report unhealthy
+       - metrics-refresh (0 * * * *): refresh materialized view, post daily summary at 9am
+       - audit-log-digest (0 8 * * *): 24h audit summary per department
+       - stale-session-cleanup (0 2 * * *): mark orphaned sessions as error
+
+    2. `src/provision-tasks.ts` — writes SKILL.md files to ~/.claude/scheduled-tasks/.
+
+    3. `__tests__/scheduled-tasks.test.ts`.
+
+    Commit: `feat(channels): add scheduled task definitions for health checks and metrics`
+    Linear: Closes JAD-236
+  </content>
+  <activeForm>Creating scheduled task definitions for agent health checks and metrics refresh</activeForm>
+</task>
+
+<task id="130" priority="medium" status="pending">
+  <content>
+    Build channel provisioning script for bulk agent-to-Slack-channel setup.
+
+    1. `src/provision-channels.ts` — provisionAgentChannels(db, slackClient, options) creates Slack channels for each enabled agent, sets topics, inserts channel_routing rows, updates agent slack_channel_name. Dry-run mode available.
+
+    2. `scripts/provision-channels.ts` — CLI wrapper.
+
+    3. `__tests__/provision-channels.test.ts`.
+
+    Commit: `feat(channels): add bulk channel provisioning script for agent-to-Slack setup`
+    Linear: Closes JAD-237
+  </content>
+  <activeForm>Building bulk channel provisioning script for agent-to-Slack-channel mapping</activeForm>
+</task>
+
+<task id="131" priority="medium" status="pending">
+  <content>
+    Add remote control integration for interactive debugging of agent sessions.
+
+    1. `src/remote-control.ts` — RemoteControl class with commands: inspect, override_tool, inject_context, terminate. SessionStatus discriminated union: running | paused | stopped. Commands delivered via MCP channel notification. Slack slash command /jade-debug integration.
+
+    2. All remote control actions audit-logged with event_type: "remote_command".
+
+    3. `__tests__/remote-control.test.ts`.
+
+    Commit: `feat(channels): add remote control for interactive agent session debugging`
+    Linear: Closes JAD-238
+  </content>
+  <activeForm>Adding remote control integration for interactive debugging of running agent sessions</activeForm>
+</task>
+
+<task id="132" priority="high" status="pending">
+  <content>
+    Generate ship report and create release PR for Channels integration.
+
+    Prerequisites: ALL tasks 113-131 pass CI.
+
+    1. Run: npm run typecheck &amp;&amp; npm run build &amp;&amp; npm test &amp;&amp; npm run lint — all must pass.
+    2. Verify 120+ tests passing.
+    3. Create Linear document "Channels Integration Ship Report":
+       - Packages: @jadecli/jade-slack-channel (new), @jadecli/jade-knowledge-workers (extended)
+       - Tables: channel_routing, agent_audit_log, agent_session_log, agent_daily_metrics
+       - Hooks: SessionStart, PreToolUse, PostToolUse, Stop
+       - Capabilities: sender allowlist, permission relay, headless mode, scheduled tasks, remote control
+    4. Create PR to main with all JAD-220 through JAD-238 references.
+
+    Commit: `docs(channels): add ship report for Channels x Knowledge Workers integration`
+    Linear: Closes JAD-239
+  </content>
+  <activeForm>Generating ship report and creating release PR for Channels integration</activeForm>
+</task>
