@@ -216,6 +216,8 @@ export {
   generateOtelCollectorConfig,
   generatePrometheusConfig,
   generateFullSetupScript,
+  validateBackend,
+  VALID_BACKENDS,
   MODEL_PRICING,
   OTEL_METRICS,
   OTEL_LABELS,

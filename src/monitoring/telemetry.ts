@@ -80,6 +80,26 @@ export function calculateCost(
 
 export type OtelBackend = 'prometheus' | 'datadog' | 'honeycomb' | 'signoz' | 'grafana' | 'custom';
 
+/** Valid backend values — used for runtime validation of CLI input */
+export const VALID_BACKENDS: ReadonlySet<string> = new Set<OtelBackend>([
+  'prometheus',
+  'datadog',
+  'honeycomb',
+  'signoz',
+  'grafana',
+  'custom',
+]);
+
+/** Validate and sanitize a backend string from CLI input */
+export function validateBackend(input: string): OtelBackend {
+  return VALID_BACKENDS.has(input) ? (input as OtelBackend) : 'prometheus';
+}
+
+/** Sanitize a string for safe interpolation into YAML/shell output */
+function sanitizeForInterpolation(value: string): string {
+  return value.replace(/[\r\n]/g, '');
+}
+
 export type OtelConfig = {
   readonly backend: OtelBackend;
   readonly endpoint: string;
@@ -235,11 +255,13 @@ export function generateOtelCollectorConfig(config: OtelConfig): string {
   debug: {}`
       : '';
 
+  const safeEndpoint = sanitizeForInterpolation(config.endpoint);
+
   const otlpExporter =
     config.backend !== 'prometheus'
       ? `  otlp:
-    endpoint: "${config.endpoint}"
-    ${config.authHeader ? `headers:\n${formatAuthHeaders(config.authHeader)}` : ''}`
+    endpoint: "${safeEndpoint}"
+    ${config.authHeader ? `headers:\n${formatAuthHeaders(sanitizeForInterpolation(config.authHeader))}` : ''}`
       : '';
 
   return `# OTel Collector Config for Claude Code

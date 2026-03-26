@@ -15,8 +15,8 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fetchAllKnowledge, saveKnowledgeIndex, loadKnowledgeIndex } from './knowledge/fetcher.js';
-import { generateOtelShellScript, generateDockerCompose } from './monitoring/telemetry.js';
-import type { OtelBackend, OtelConfig } from './monitoring/telemetry.js';
+import { generateOtelShellScript, generateDockerCompose, validateBackend } from './monitoring/telemetry.js';
+import type { OtelConfig } from './monitoring/telemetry.js';
 
 const KNOWLEDGE_DIR = join(homedir(), '.claude', 'knowledge');
 
@@ -138,7 +138,7 @@ async function cmdOtelSetup(args: string[]): Promise<void> {
     'http://localhost:4317';
 
   const config: OtelConfig = {
-    backend: backendFlag as OtelBackend,
+    backend: validateBackend(backendFlag),
     endpoint: endpointFlag,
     protocol: 'grpc',
     exportIntervalMs: 60_000,
@@ -176,7 +176,7 @@ async function cmdOtelCompose(args: string[]): Promise<void> {
     (backendIdx !== -1 ? args[backendIdx + 1] : undefined) ??
     'prometheus';
 
-  const compose = generateDockerCompose(backendFlag as OtelBackend);
+  const compose = generateDockerCompose(validateBackend(backendFlag));
   const outPath = './docker-compose.claude-otel.yml';
   await writeFile(outPath, compose);
   console.log(`Generated ${outPath}`);
