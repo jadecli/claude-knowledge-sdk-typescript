@@ -69,7 +69,7 @@ claude --plugin-dir ~/repos/claude-knowledge-sdk-typescript
 Three GitHub Actions workflows:
 1. **ci.yml** — typecheck → build → test → lint (merge gate)
 2. **claude-review.yml** — Claude Code Action for PR review (needs `CLAUDE_CODE_OAUTH_TOKEN` secret)
-3. **security.yml** — Claude security review (needs `CLAUDE_API_KEY` secret)
+3. **security.yml** — Claude security review (needs `CLAUDE_CODE_OAUTH_TOKEN` secret)
 
 ## Important Context
 
