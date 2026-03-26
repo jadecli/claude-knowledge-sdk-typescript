@@ -12,6 +12,15 @@ import type { ScdError } from '../types/schema.js';
 
 const FUTURE_END = '9999-12-31T00:00:00Z';
 
+/** Only lowercase identifiers: letters, digits, underscores; must start with letter or underscore. */
+const IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/;
+
+function validateIdentifier(name: string, kind: string): void {
+  if (!IDENTIFIER_RE.test(name)) {
+    throw new TypeError(`Invalid SQL identifier for ${kind}: "${name}"`);
+  }
+}
+
 class ScdErrorImpl extends Error {
   constructor(
     public readonly detail: ScdError,
@@ -38,6 +47,8 @@ export async function insertWithEffectiveDating<T>(
   naturalKeyValue: string,
   row: Record<string, unknown>,
 ): Promise<Result<T, ScdErrorImpl>> {
+  validateIdentifier(table, 'table');
+  validateIdentifier(naturalKeyColumn, 'naturalKeyColumn');
   try {
     // Expire any existing current row
     await client.sql(
@@ -86,6 +97,8 @@ export async function expireRow(
   surrogateKeyColumn: string,
   surrogateKeyValue: number,
 ): Promise<Result<void, ScdErrorImpl>> {
+  validateIdentifier(table, 'table');
+  validateIdentifier(surrogateKeyColumn, 'surrogateKeyColumn');
   try {
     const rows = await client.sql(
       `UPDATE ${table} SET eff_end = now(), is_current = false, updated_at = now()
@@ -118,6 +131,8 @@ export async function getAsOf<T>(
   naturalKeyValue: string,
   asOfDate: Date,
 ): Promise<Result<T | null, ScdErrorImpl>> {
+  validateIdentifier(table, 'table');
+  validateIdentifier(naturalKeyColumn, 'naturalKeyColumn');
   try {
     const rows = await client.sql(
       `SELECT * FROM ${table}
@@ -143,6 +158,8 @@ export async function getHistory<T>(
   naturalKeyColumn: string,
   naturalKeyValue: string,
 ): Promise<Result<readonly T[], ScdErrorImpl>> {
+  validateIdentifier(table, 'table');
+  validateIdentifier(naturalKeyColumn, 'naturalKeyColumn');
   try {
     const rows = await client.sql(
       `SELECT * FROM ${table}
