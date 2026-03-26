@@ -4,6 +4,9 @@ import {
   generateOtelEnvVars,
   generateOtelShellScript,
   generateDockerCompose,
+  generateOtelCollectorConfig,
+  generatePrometheusConfig,
+  generateFullSetupScript,
   MODEL_PRICING,
   OTEL_METRICS,
   OTEL_LABELS,
@@ -181,5 +184,108 @@ describe('OTEL_LABELS constants', () => {
   it('has standard label names', () => {
     expect(OTEL_LABELS.model).toBe('model');
     expect(OTEL_LABELS.tokenType).toBe('type');
+  });
+});
+
+describe('generateOtelCollectorConfig', () => {
+  const config: OtelConfig = {
+    backend: 'prometheus',
+    endpoint: 'http://localhost:4317',
+    protocol: 'grpc',
+    exportIntervalMs: 60_000,
+    logPrompts: false,
+    logToolDetails: false,
+    includeSessionId: false,
+  };
+
+  it('generates YAML with otlp receivers on 4317 and 4318', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('0.0.0.0:4317');
+    expect(yaml).toContain('0.0.0.0:4318');
+  });
+
+  it('includes prometheus exporter for prometheus backend', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('prometheusremotewrite');
+    expect(yaml).toContain('0.0.0.0:8889');
+  });
+
+  it('includes otlp exporter for non-prometheus backends', () => {
+    const yaml = generateOtelCollectorConfig({
+      ...config,
+      backend: 'datadog',
+      endpoint: 'https://datadog.example.com',
+    });
+    expect(yaml).toContain('otlp:');
+    expect(yaml).toContain('https://datadog.example.com');
+  });
+
+  it('includes memory_limiter and batch processors', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('memory_limiter');
+    expect(yaml).toContain('batch');
+  });
+
+  it('has both metrics and logs pipelines', () => {
+    const yaml = generateOtelCollectorConfig(config);
+    expect(yaml).toContain('metrics:');
+    expect(yaml).toContain('logs:');
+  });
+});
+
+describe('generatePrometheusConfig', () => {
+  it('scrapes otel-collector:8889', () => {
+    const yaml = generatePrometheusConfig();
+    expect(yaml).toContain('otel-collector:8889');
+  });
+
+  it('has a claude-code job that filters claude_code_ metrics', () => {
+    const yaml = generatePrometheusConfig();
+    expect(yaml).toContain('claude-code');
+    expect(yaml).toContain('claude_code_.*');
+  });
+});
+
+describe('generateFullSetupScript', () => {
+  const config: OtelConfig = {
+    backend: 'prometheus',
+    endpoint: 'http://localhost:4317',
+    protocol: 'grpc',
+    exportIntervalMs: 60_000,
+    logPrompts: false,
+    logToolDetails: false,
+    includeSessionId: false,
+  };
+
+  it('generates executable bash script', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('#!/bin/bash');
+    expect(script).toContain('set -euo pipefail');
+  });
+
+  it('creates all 4 config files', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('otel-collector-config.yaml');
+    expect(script).toContain('prometheus.yml');
+    expect(script).toContain('docker-compose.yml');
+    expect(script).toContain('claude-otel-env.sh');
+  });
+
+  it('includes startup instructions', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('docker compose up -d');
+    expect(script).toContain('source claude-otel-env.sh');
+  });
+
+  it('includes key metrics references', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('claude_code_cost_usage_USD_total');
+    expect(script).toContain('claude_code_token_usage_tokens_total');
+  });
+
+  it('includes Prometheus dashboard URLs', () => {
+    const script = generateFullSetupScript(config);
+    expect(script).toContain('localhost:9090');
+    expect(script).toContain('localhost:3000');
   });
 });
