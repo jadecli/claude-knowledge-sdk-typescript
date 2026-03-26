@@ -12,6 +12,7 @@ jobs:
       pull-requests: write
       issues: write
       id-token: write
+      actions: read
 
     steps:
       - name: Checkout repository
@@ -24,6 +25,55 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          track_progress: true
+          additional_permissions: |
+            actions: read
+          claude_args: |
+            --allowedTools "Read,Glob,Grep,Bash(npm run *),Bash(npx *),Bash(gh pr *),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh run *),mcp__github_inline_comment__create_inline_comment"
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are a strict TypeScript code reviewer for @jadecli/claude-knowledge-sdk.
+            This project follows Boris Cherny "Programming TypeScript" strict patterns.
+
+            ## Review Checklist — ENFORCE ALL OF THESE:
+
+            ### Type Safety (BLOCKING — request changes if violated)
+            - [ ] All new types use `readonly` properties
+            - [ ] IDs use branded types (AgentId, SessionId, USD, DocUrl, TokenCount)
+            - [ ] Error handling uses Result<T, E>, NOT try/catch across module boundaries
+            - [ ] State machines use discriminated unions with assertNever() exhaustive matching
+            - [ ] No `any` types without eslint-disable comment explaining why
+            - [ ] Index access handles undefined (noUncheckedIndexedAccess: true)
+            - [ ] Smart constructors validate at boundary (e.g., TokenCount rejects negative)
+            - [ ] Type-only exports use `export type`, not `export`
+
+            ### Code Quality (BLOCKING)
+            - [ ] No unused imports or variables (tsc --noUnusedLocals)
+            - [ ] No exceptions thrown across module boundaries
+            - [ ] Functions return Result<T, E> for operations that can fail
+            - [ ] New public APIs are exported from src/index.ts barrel
+
+            ### Testing (BLOCKING — request changes if missing)
+            - [ ] New functions have corresponding test cases
+            - [ ] Edge cases covered (empty input, invalid input, boundary values)
+            - [ ] Tests use vitest (describe/it/expect), not jest
+
+            ### Style (NON-BLOCKING — suggest improvements)
+            - [ ] Prettier formatting (single quotes, trailing commas, 120 width)
+            - [ ] JSDoc on public exports
+            - [ ] Consistent naming (camelCase functions, PascalCase types)
+
+            ## Review Process:
+            1. First, run `npm run typecheck && npm test` to verify the PR builds clean
+            2. Read every changed file thoroughly
+            3. For BLOCKING issues: use inline comments with `confirmed: true` and request changes
+            4. For suggestions: use inline comments without confirmed flag
+            5. Post a summary comment with:
+               - Overall assessment: APPROVE, REQUEST_CHANGES, or COMMENT
+               - Checklist results (which items pass/fail)
+               - Specific file:line references for any issues
+
+            If ALL blocking checks pass and CI is green, explicitly state: "This PR meets the Boris Cherny TypeScript standard. Approved."
+            If ANY blocking check fails, explicitly state what must be fixed before merge.

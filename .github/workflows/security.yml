@@ -21,5 +21,18 @@ jobs:
 
       - uses: anthropics/claude-code-security-review@main
         with:
-          comment-pr: true
           claude-api-key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          comment-pr: 'true'
+          exclude-directories: 'node_modules,dist,coverage,.claude'
+          custom-security-scan-instructions: |
+            This is a TypeScript SDK project (@jadecli/claude-knowledge-sdk).
+            Focus security review on:
+            1. Command injection via Bash tool patterns (the SDK generates shell commands)
+            2. Path traversal in plugin validation (isValidPluginName, isValidMarketplaceUrl)
+            3. URL validation in DocUrl smart constructor and marketplace URL checks
+            4. YAML injection in workflow generator output (generateWorkflow, generatePresetWorkflow)
+            5. Template literal injection in MCPB manifest builder (${__dirname}, ${user_config.*})
+            6. Prototype pollution in deep merge patterns (MCP config merging)
+            7. Secret exposure in generated workflow YAML (ensure tokens use ${{ secrets.* }})
+            Rate all findings as CRITICAL, HIGH, MEDIUM, or LOW.
+            Flag any pattern where user input flows into shell commands or YAML output unescaped.
