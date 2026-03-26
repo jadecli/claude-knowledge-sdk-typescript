@@ -85,7 +85,7 @@ export async function runMigrations(
 
     // Read migration files sorted by name
     const files = readdirSync(dir)
-      .filter(f => f.endsWith('.sql'))
+      .filter((f: string) => f.endsWith('.sql'))
       .sort();
 
     const results: MigrationResult[] = [];
@@ -113,12 +113,12 @@ export async function runMigrations(
       try {
         const statements = content
           .split(';')
-          .map(s => s.trim())
-          .filter(s => {
+          .map((s: string) => s.trim())
+          .filter((s: string) => {
             // Strip leading comment lines to check if there's actual SQL
             const withoutComments = s
               .split('\n')
-              .filter(line => !line.trimStart().startsWith('--') && line.trim().length > 0)
+              .filter((line: string) => !line.trimStart().startsWith('--') && line.trim().length > 0)
               .join('\n')
               .trim();
             return withoutComments.length > 0;
@@ -174,10 +174,13 @@ if (isDirectRun) {
   console.error(`Running migrations against Neon...`);
   const result = await runMigrations(connectionString);
 
+  // Fix: explicit narrowing — check the error branch and exit,
+  // then bind result.value to a local after the guard.
   if (!result.ok) {
     console.error(`Migration failed: ${result.error.message}`);
     process.exit(1);
   }
 
-  console.error(`Done. ${result.value.length} migration(s) applied.`);
+  const applied = result.value;
+  console.error(`Done. ${applied.length} migration(s) applied.`);
 }
