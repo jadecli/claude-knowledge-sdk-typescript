@@ -22,10 +22,17 @@ skills/        → Claude Code skills (SKILL.md format)
   research-loop/   — Multi-agent recursive research
   otel-tracker/    — OTel monitoring setup
   llms-txt-crawler/ — llms.txt parser + Scrapy spider generator
+  sprint-planning/ — Linear sprint planning from task lists
 agents/        → Plugin agents dir (future)
+docs/          → Infrastructure and project docs
+  infrastructure/  — Neon, Cloudflare, Netlify setup guides
+  linear-projects.md — Linear project/sprint structure
+scripts/       → Setup scripts
+  setup-branch-protection.sh — GitHub branch protection
+  setup-infrastructure.sh    — Guided infra setup
 .claude-plugin/ → Plugin manifest (plugin.json)
-.lsp.json      → TypeScript LSP config for the plugin
-.github/workflows/ → CI, Claude PR Review, Security Review
+.lsp.json      → TypeScript LSP config (see .lsp.README.md)
+.github/workflows/ → CI, Claude Review, Security, Release, Release Doctor
 ```
 
 ## Code Standards
@@ -66,10 +73,36 @@ claude --plugin-dir ~/repos/claude-knowledge-sdk-typescript
 
 ## CI/CD
 
-Three GitHub Actions workflows:
+Six GitHub Actions workflows:
 1. **ci.yml** — typecheck → build → test → lint (merge gate)
-2. **claude-review.yml** — Claude Code Action for PR review (needs `CLAUDE_CODE_OAUTH_TOKEN` secret)
-3. **security.yml** — Claude security review (needs `CLAUDE_CODE_OAUTH_TOKEN` secret)
+2. **claude-review.yml** — Claude Code Action for PR review (needs `CLAUDE_CODE_OAUTH_TOKEN`)
+3. **claude.yml** — Interactive Claude on @claude mentions in issues/PRs
+4. **security.yml** — Claude security review (needs `CLAUDE_API_KEY`)
+5. **release.yml** — release-please auto-creates Release PRs on push to main
+6. **release-doctor.yml** — validates required secrets exist
+
+## DevOps Setup (First-Time)
+
+1. Push to GitHub: `git push -u origin main`
+2. Configure branch protection: `bash scripts/setup-branch-protection.sh`
+3. Install Claude GitHub App: `/install-github-app` in Claude Code
+4. Add GitHub Secrets (Settings → Secrets → Actions):
+   - `CLAUDE_CODE_OAUTH_TOKEN` — run `claude setup-token` locally
+   - `CLAUDE_API_KEY` — Anthropic API key
+5. Verify: create a test PR to trigger all workflows
+
+## Commit Convention
+
+Conventional commits enforced by commitlint + husky:
+- Format: `type(scope): description`
+- Types: feat, fix, chore, docs, refactor, test, ci, build, perf
+- Scopes: init, types, agent, knowledge, context, monitoring, plugin, crawler, cli, eval, deps, ci, release, security, docs, infra
+
+## Linear Integration
+
+- Workspace: jadecli, Team: Jadecli, Prefix: JAD
+- Project: [Claude Knowledge SDK](https://linear.app/jadecli/project/claude-knowledge-sdk-9b3118b93129)
+- Reference issues in commit footers: `Closes JAD-175`
 
 ## Tool Systems
 
