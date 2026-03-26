@@ -6,21 +6,38 @@
 
 import type { NeonClient } from './neon-client.js';
 import { insertWithEffectiveDating } from './scd.js';
-import { Ok, Err, type Result } from '../types/result.js';
+import { Ok, Err, assertNever, type Result } from '../types/result.js';
 import type { FactAgent, CreateAgentInput, UpdateAgentInput, AgentCrudError, LevelId } from '../types/schema.js';
 
 class AgentCrudErrorImpl extends Error {
   constructor(public readonly detail: AgentCrudError) {
-    super(
-      detail.type === 'db_error'
-        ? detail.cause.message
-        : detail.type === 'constraint_violation'
-          ? detail.detail
-          : 'type' in detail && 'agent_id' in detail
-            ? `${detail.type}: ${detail.agent_id}`
-            : `${detail.type}`,
-    );
+    super(AgentCrudErrorImpl.message(detail));
     this.name = 'AgentCrudError';
+  }
+
+  private static message(d: AgentCrudError): string {
+    switch (d.type) {
+      case 'not_found':
+        return `Not found: ${d.entity}/${d.id}`;
+      case 'already_expired':
+        return `Already expired: ${d.entity}/${d.id}`;
+      case 'constraint_violation':
+        return d.detail;
+      case 'invalid_identifier':
+        return `Invalid SQL identifier: ${d.identifier}`;
+      case 'db_error':
+        return d.cause.message;
+      case 'invalid_level':
+        return `Invalid level: ${d.level}`;
+      case 'duplicate_agent':
+        return `Duplicate agent: ${d.agent_id}`;
+      case 'invalid_reporting_chain':
+        return d.detail;
+      case 'agent_not_found':
+        return `Agent not found: ${d.agent_id}`;
+      default:
+        return assertNever(d);
+    }
   }
 }
 
@@ -155,7 +172,7 @@ export async function updateAgent(
  */
 export async function deactivateAgent(client: NeonClient, agentId: string): Promise<Result<void, AgentCrudErrorImpl>> {
   const result = await updateAgent(client, agentId, { status: 'inactive' });
-  if (!result.ok) return result as unknown as Result<void, AgentCrudErrorImpl>;
+  if (!result.ok) return Err(result.error);
   return Ok(undefined);
 }
 

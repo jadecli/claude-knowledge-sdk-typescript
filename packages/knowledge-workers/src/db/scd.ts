@@ -7,7 +7,7 @@
  */
 
 import type { NeonClient } from './neon-client.js';
-import { Ok, Err, type Result } from '../types/result.js';
+import { Ok, Err, assertNever, type Result } from '../types/result.js';
 import type { ScdError } from '../types/schema.js';
 
 const FUTURE_END = '9999-12-31T00:00:00Z';
@@ -17,16 +17,25 @@ const IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/;
 
 class ScdErrorImpl extends Error {
   constructor(public readonly detail: ScdError) {
-    super(
-      detail.type === 'db_error'
-        ? detail.cause.message
-        : detail.type === 'constraint_violation'
-          ? detail.detail
-          : detail.type === 'invalid_identifier'
-            ? `Invalid SQL identifier: ${detail.identifier}`
-            : `${detail.type}: ${detail.entity}/${detail.id}`,
-    );
+    super(ScdErrorImpl.message(detail));
     this.name = 'ScdError';
+  }
+
+  private static message(d: ScdError): string {
+    switch (d.type) {
+      case 'not_found':
+        return `Not found: ${d.entity}/${d.id}`;
+      case 'already_expired':
+        return `Already expired: ${d.entity}/${d.id}`;
+      case 'constraint_violation':
+        return d.detail;
+      case 'invalid_identifier':
+        return `Invalid SQL identifier: ${d.identifier}`;
+      case 'db_error':
+        return d.cause.message;
+      default:
+        return assertNever(d);
+    }
   }
 }
 

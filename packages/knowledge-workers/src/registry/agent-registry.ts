@@ -9,7 +9,7 @@
 
 import type { NeonClient } from '../db/neon-client.js';
 import { createAgent } from '../db/agent-crud.js';
-import { Ok, Err, type Result } from '../types/result.js';
+import { Ok, Err, assertNever, type Result } from '../types/result.js';
 import type {
   AgentDefinition,
   AgentSummary,
@@ -22,16 +22,35 @@ import type {
 
 class RegistryErrorImpl extends Error {
   constructor(public readonly detail: RegistryError) {
-    super(
-      detail.type === 'db_error'
-        ? detail.cause.message
-        : detail.type === 'resolution_failed'
-          ? detail.detail
-          : detail.type === 'agent_not_found'
-            ? `Agent not found: ${detail.agent_id}`
-            : `${detail.type}`,
-    );
+    super(RegistryErrorImpl.message(detail));
     this.name = 'RegistryError';
+  }
+
+  private static message(d: RegistryError): string {
+    switch (d.type) {
+      case 'not_found':
+        return `Not found: ${d.entity}/${d.id}`;
+      case 'already_expired':
+        return `Already expired: ${d.entity}/${d.id}`;
+      case 'constraint_violation':
+        return d.detail;
+      case 'invalid_identifier':
+        return `Invalid SQL identifier: ${d.identifier}`;
+      case 'db_error':
+        return d.cause.message;
+      case 'invalid_level':
+        return `Invalid level: ${d.level}`;
+      case 'duplicate_agent':
+        return `Duplicate agent: ${d.agent_id}`;
+      case 'invalid_reporting_chain':
+        return d.detail;
+      case 'agent_not_found':
+        return `Agent not found: ${d.agent_id}`;
+      case 'resolution_failed':
+        return d.detail;
+      default:
+        return assertNever(d);
+    }
   }
 }
 
@@ -204,7 +223,11 @@ export async function getOrgChart(
 
     const agents = rows as unknown as FlatNode[];
 
-    // Pass 1: pre-allocate mutable child arrays keyed by agent_id
+    // Pass 1: pre-allocate mutable child arrays keyed by agent_id.
+    // Note: OrgNode.children is `readonly OrgNode[]` for callers, but we mutate
+    // the backing array via the childNodes alias during construction. This is an
+    // intentional post-construction mutation — a known JS/TS limitation where
+    // readonly prevents external mutation but not internal aliased writes.
     const nodeMap = new Map<string, { readonly agent: FlatNode; readonly childNodes: OrgNode[] }>();
     for (const agent of agents) {
       nodeMap.set(agent.agent_id, { agent, childNodes: [] });
