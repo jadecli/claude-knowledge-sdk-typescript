@@ -68,18 +68,18 @@ export interface WorkerContext {
 // ── Static Config ────────────────────────────────────────────
 
 const WORKER_CONFIGS: readonly WorkerConfig[] = [
-  { department: 'product-management', slack_channel: '#jade-product-management' as SlackChannel, default_agent_id: 'product-pm', repo: 'jadecli/jade-product-management' as GitHubRepo, description: 'Product roadmap, specs, user stories, stakeholder updates' },
-  { department: 'engineering', slack_channel: '#jade-engineering' as SlackChannel, default_agent_id: 'eng-lead', repo: 'jadecli/jade-engineering' as GitHubRepo, description: 'Code review, architecture, incident response, design docs' },
-  { department: 'sales', slack_channel: '#jade-sales' as SlackChannel, default_agent_id: 'sales-ae', repo: 'jadecli/jade-sales' as GitHubRepo, description: 'Prospect research, call prep, pipeline review, battlecards' },
-  { department: 'customer-support', slack_channel: '#jade-customer-support' as SlackChannel, default_agent_id: 'support-agent', repo: 'jadecli/jade-customer-support' as GitHubRepo, description: 'Ticket triage, KB articles, escalation, CSAT analysis' },
-  { department: 'marketing', slack_channel: '#jade-marketing' as SlackChannel, default_agent_id: 'marketing-spe', repo: 'jadecli/jade-marketing' as GitHubRepo, description: 'Content creation, campaigns, brand voice, competitor briefs' },
-  { department: 'legal', slack_channel: '#jade-legal' as SlackChannel, default_agent_id: 'legal-counsel', repo: 'jadecli/jade-legal' as GitHubRepo, description: 'Contract review, NDAs, compliance, risk assessment' },
-  { department: 'finance', slack_channel: '#jade-finance' as SlackChannel, default_agent_id: 'finance-analyst', repo: 'jadecli/jade-finance' as GitHubRepo, description: 'Journal entries, reconciliation, close process, variance analysis' },
-  { department: 'data', slack_channel: '#jade-data' as SlackChannel, default_agent_id: 'data-analyst', repo: 'jadecli/jade-data' as GitHubRepo, description: 'SQL queries, dashboards, data validation, statistical analysis' },
-  { department: 'operations', slack_channel: '#jade-operations' as SlackChannel, default_agent_id: 'ops-analyst', repo: 'jadecli/jade-operations' as GitHubRepo, description: 'Process optimization, capacity planning, vendor management' },
-  { department: 'design', slack_channel: '#jade-design' as SlackChannel, default_agent_id: 'design-lead', repo: 'jadecli/jade-design' as GitHubRepo, description: 'Design systems, UX review, prototyping, engineering handoff' },
-  { department: 'enterprise-search', slack_channel: '#jade-enterprise-search' as SlackChannel, default_agent_id: 'search-lead', repo: 'jadecli/jade-enterprise-search' as GitHubRepo, description: 'Cross-tool search, index management, knowledge graph' },
-  { department: 'productivity', slack_channel: '#jade-productivity' as SlackChannel, default_agent_id: 'productivity-mgr', repo: 'jadecli/jade-productivity' as GitHubRepo, description: 'Task management, calendar optimization, daily standups' },
+  { department: 'product-management', slack_channel: SlackChannel('#jade-product-management'), default_agent_id: 'product-pm', repo: GitHubRepo('jadecli/jade-product-management'), description: 'Product roadmap, specs, user stories, stakeholder updates' },
+  { department: 'engineering', slack_channel: SlackChannel('#jade-engineering'), default_agent_id: 'eng-lead', repo: GitHubRepo('jadecli/jade-engineering'), description: 'Code review, architecture, incident response, design docs' },
+  { department: 'sales', slack_channel: SlackChannel('#jade-sales'), default_agent_id: 'sales-ae', repo: GitHubRepo('jadecli/jade-sales'), description: 'Prospect research, call prep, pipeline review, battlecards' },
+  { department: 'customer-support', slack_channel: SlackChannel('#jade-customer-support'), default_agent_id: 'support-agent', repo: GitHubRepo('jadecli/jade-customer-support'), description: 'Ticket triage, KB articles, escalation, CSAT analysis' },
+  { department: 'marketing', slack_channel: SlackChannel('#jade-marketing'), default_agent_id: 'marketing-spe', repo: GitHubRepo('jadecli/jade-marketing'), description: 'Content creation, campaigns, brand voice, competitor briefs' },
+  { department: 'legal', slack_channel: SlackChannel('#jade-legal'), default_agent_id: 'legal-counsel', repo: GitHubRepo('jadecli/jade-legal'), description: 'Contract review, NDAs, compliance, risk assessment' },
+  { department: 'finance', slack_channel: SlackChannel('#jade-finance'), default_agent_id: 'finance-analyst', repo: GitHubRepo('jadecli/jade-finance'), description: 'Journal entries, reconciliation, close process, variance analysis' },
+  { department: 'data', slack_channel: SlackChannel('#jade-data'), default_agent_id: 'data-analyst', repo: GitHubRepo('jadecli/jade-data'), description: 'SQL queries, dashboards, data validation, statistical analysis' },
+  { department: 'operations', slack_channel: SlackChannel('#jade-operations'), default_agent_id: 'ops-analyst', repo: GitHubRepo('jadecli/jade-operations'), description: 'Process optimization, capacity planning, vendor management' },
+  { department: 'design', slack_channel: SlackChannel('#jade-design'), default_agent_id: 'design-lead', repo: GitHubRepo('jadecli/jade-design'), description: 'Design systems, UX review, prototyping, engineering handoff' },
+  { department: 'enterprise-search', slack_channel: SlackChannel('#jade-enterprise-search'), default_agent_id: 'search-lead', repo: GitHubRepo('jadecli/jade-enterprise-search'), description: 'Cross-tool search, index management, knowledge graph' },
+  { department: 'productivity', slack_channel: SlackChannel('#jade-productivity'), default_agent_id: 'productivity-mgr', repo: GitHubRepo('jadecli/jade-productivity'), description: 'Task management, calendar optimization, daily standups' },
 ];
 
 // ── Lookups ──────────────────────────────────────────────────

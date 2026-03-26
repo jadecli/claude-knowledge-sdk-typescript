@@ -1,13 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getWorkerConfig,
   getWorkerConfigByChannel,
   listWorkerConfigs,
+  getWorkerContext,
   buildContextString,
   WorkerConfigError,
   SlackChannel,
   GitHubRepo,
 } from '../db/worker-config.js';
+import { createMockClient, type MockNeonClient } from './helpers/mock-neon.js';
 import type { FactAgent } from '../types/schema.js';
 
 function mockFactAgent(overrides: Partial<FactAgent> = {}): FactAgent {
@@ -127,6 +129,74 @@ describe('worker-config', () => {
 
     it('shows placeholder for empty team', () => {
       expect(buildContextString(cfg(), agent, [])).toContain('(no team members registered)');
+    });
+  });
+
+  describe('getWorkerContext', () => {
+    let client: MockNeonClient;
+    const agentRow = mockFactAgent();
+
+    beforeEach(() => {
+      client = createMockClient();
+    });
+
+    it('returns Ok with full context for valid department + agent', async () => {
+      // getAgent: SELECT * FROM fact_agent WHERE agent_id = $1 AND is_current = true
+      client.sql.mockResolvedValueOnce([agentRow]);
+      // listAgentsByDepartment: SELECT * FROM fact_agent WHERE department_id = $1
+      client.sql.mockResolvedValueOnce([agentRow]);
+
+      const r = await getWorkerContext(client, 'product-management');
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.value.config.department).toBe('product-management');
+      expect(r.value.agent.agent_id).toBe('product-pm');
+      expect(r.value.team).toHaveLength(1);
+      expect(r.value.context_string).toContain('# product-management Knowledge Worker');
+    });
+
+    it('returns Err department_not_found for unknown department', async () => {
+      const r = await getWorkerContext(client, 'nonexistent');
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.error).toBeInstanceOf(WorkerConfigError);
+      expect(r.error.type).toBe('department_not_found');
+    });
+
+    it('returns Err agent_resolution_failed when getAgent throws', async () => {
+      client.sql.mockRejectedValueOnce(new Error('connection refused'));
+
+      const r = await getWorkerContext(client, 'product-management');
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.error).toBeInstanceOf(WorkerConfigError);
+      expect(r.error.type).toBe('agent_resolution_failed');
+      expect(r.error.message).toContain('connection refused');
+    });
+
+    it('returns Err agent_resolution_failed when agent not found (null)', async () => {
+      // getAgent returns empty rows → null
+      client.sql.mockResolvedValueOnce([]);
+
+      const r = await getWorkerContext(client, 'product-management');
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.error).toBeInstanceOf(WorkerConfigError);
+      expect(r.error.type).toBe('agent_resolution_failed');
+      expect(r.error.message).toContain('Agent not found');
+    });
+
+    it('returns Ok with empty team when listAgentsByDepartment fails', async () => {
+      // getAgent succeeds
+      client.sql.mockResolvedValueOnce([agentRow]);
+      // listAgentsByDepartment throws
+      client.sql.mockRejectedValueOnce(new Error('timeout'));
+
+      const r = await getWorkerContext(client, 'product-management');
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.value.team).toHaveLength(0);
+      expect(r.value.context_string).toContain('(no team members registered)');
     });
   });
 
