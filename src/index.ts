@@ -106,6 +106,40 @@ export type {
   MemoryCategory,
 } from './context/manager.js';
 
+// ── Action Types (claude-code-action@v1) ───────────────────────
+export type {
+  ActionInputs,
+  ActionAuth,
+  ActionOutputs,
+  ActionSettings,
+  ActionTriggerEvent,
+  ClaudeArgs,
+  McpConfigInline,
+  CloudProvider,
+  WorkflowPermissions,
+  WorkflowPermission,
+  WorkflowPreset,
+  ToolPermissionSet,
+  PullRequestActivityType,
+  IssueActivityType,
+  SecurityReviewInputs,
+  SecurityReviewOutputs,
+  GitHubCIMcpTool,
+  GitHubInlineCommentTool,
+} from './types/action.js';
+
+// ── Action Builders ────────────────────────────────────────────
+export {
+  buildClaudeArgs,
+  expandToolSet,
+  mcpServer,
+  mcpServerPython,
+  promptContext,
+  jsonSchema,
+} from './action/directives.js';
+export { generateWorkflow, generatePresetWorkflow, generateSecurityReviewWorkflow } from './action/workflow.js';
+export type { WorkflowConfig, WorkflowTrigger } from './action/workflow.js';
+
 // ── Monitoring ──────────────────────────────────────────────────
 export {
   calculateCost,
