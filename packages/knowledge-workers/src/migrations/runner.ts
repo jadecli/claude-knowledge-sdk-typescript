@@ -108,9 +108,18 @@ export async function runMigrations(
         continue; // Already applied, skip
       }
 
-      // Apply migration
+      // Apply migration — split by semicolons since Neon HTTP driver
+      // doesn't support multiple statements in a single prepared statement
       try {
-        await sql(content);
+        const statements = content
+          .split(';')
+          .map(s => s.trim())
+          .filter(s => s.length > 0 && !s.startsWith('--'));
+
+        for (const stmt of statements) {
+          await sql(stmt);
+        }
+
         await sql(
           `INSERT INTO _migrations (filename, checksum) VALUES ($1, $2)`,
           [filename, checksum],
