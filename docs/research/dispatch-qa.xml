@@ -1,0 +1,882 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<research topic="Claude Dispatch Feature" date="2026-03-26">
+
+  <qa id="1">
+    <question>
+      <text>What is the vision for Claude's new Dispatch feature?</text>
+      <context>
+        <source>User-provided product description</source>
+        <raw><![CDATA[
+Dispatch to Claude and check in from anywhere—a task, a code session, in one continuous thread.
+Your phone is like a walkie talkie that can communicate with Claude on your computer.
+Just send Claude a message, and it'll work on tasks using your computer.
+Claude can also run tasks on a schedule or whenever you need them.
+Remember to keep your computer awake so Claude can keep working.
+Claude will access your desktop (files, apps, browser) to complete tasks you send from your phone.
+This may have security risks. Only pair devices that you own and trust.
+        ]]></raw>
+      </context>
+    </question>
+    <response>
+      <summary>Cross-device, asynchronous task execution — send and monitor Claude tasks from your phone while Claude works on your desktop.</summary>
+      <pillars>
+        <pillar name="Phone as remote control">Walkie-talkie metaphor. Send messages from your phone, Claude executes on your computer with full desktop access (files, apps, browser).</pillar>
+        <pillar name="Continuous thread">One persistent conversation thread spanning devices and contexts (tasks, code sessions, check-ins).</pillar>
+        <pillar name="Scheduled/on-demand execution">Claude can run tasks on a schedule or when triggered, not just in real-time interactive sessions.</pillar>
+        <pillar name="Desktop-grade capabilities">Runs on actual computer with access to full environment, not a sandboxed API.</pillar>
+      </pillars>
+      <tradeoffs>
+        <tradeoff>Computer must stay awake for Claude to keep working.</tradeoff>
+        <tradeoff>Security surface — granting remote access to desktop. Trust model: only pair devices you own.</tradeoff>
+      </tradeoffs>
+      <insight>Essentially turns Claude Code into a persistent agent daemon that can be dispatched work from anywhere, rather than requiring terminal presence.</insight>
+    </response>
+  </qa>
+
+  <qa id="2">
+    <question>
+      <text>Decompose Dispatch and Channels into ASCII wireframes showing architecture, data flow, feature taxonomy, and how canonical features relate.</text>
+      <context>
+        <source>Official Anthropic documentation — Channels (Automation) page + comparison table</source>
+        <raw><![CDATA[
+Channels are MCP servers that push events into a running Claude Code session.
+Two-way: Claude reads event, replies back through the same channel (chat bridge).
+Events only arrive while session is open — background process or persistent terminal for always-on.
+Supported: Telegram, Discord, iMessage (research preview, requires Bun).
+Security: sender allowlist per channel, pairing codes, --channels flag per session.
+Enterprise: channelsEnabled master switch, allowedChannelPlugins whitelist.
+Comparison matrix: Web sessions (cloud sandbox), Slack (spawns web session), MCP (pull/query),
+Remote Control (drive local from claude.ai/mobile), Channels (push events into local session).
+        ]]></raw>
+      </context>
+    </question>
+    <response>
+      <summary>Five ASCII wireframes decomposing the full Dispatch + Channels architecture: system topology, channel data flow, feature taxonomy, security layers, and the canonical feature comparison matrix.</summary>
+
+      <wireframe id="1" name="System Topology — Dispatch + Channels">
+        <ascii><![CDATA[
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        DISPATCH + CHANNELS TOPOLOGY                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
+│  │   📱 Phone    │    │  🌐 Browser  │    │  💬 Chat App │                   │
+│  │  (claude.ai)  │    │  (claude.ai) │    │  (TG/DC/iM)  │                   │
+│  └──────┬───────┘    └──────┬───────┘    └──────┬───────┘                   │
+│         │                   │                   │                            │
+│         │ Remote Control    │ Web UI            │ Channel Message             │
+│         ▼                   ▼                   ▼                            │
+│  ┌─────────────────────────────────────────────────────────┐                │
+│  │                   TRANSPORT LAYER                        │                │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │                │
+│  │  │  WebSocket   │  │   HTTP/API   │  │  MCP Protocol  │  │                │
+│  │  │  (Remote)    │  │  (Dispatch)  │  │  (Channels)    │  │                │
+│  │  └──────┬──────┘  └──────┬───────┘  └───────┬────────┘  │                │
+│  └─────────┼────────────────┼──────────────────┼────────────┘                │
+│            │                │                  │                             │
+│            ▼                ▼                  ▼                             │
+│  ┌─────────────────────────────────────────────────────────┐                │
+│  │              🖥️  LOCAL DESKTOP (must be awake)           │                │
+│  │                                                         │                │
+│  │  ┌───────────────────────────────────────────────────┐  │                │
+│  │  │           CLAUDE CODE SESSION (persistent)        │  │                │
+│  │  │                                                   │  │                │
+│  │  │  ┌──────────┐  ┌──────────┐  ┌────────────────┐  │  │                │
+│  │  │  │  Agent    │  │  Tools   │  │  Channel Mgr   │  │  │                │
+│  │  │  │  Loop     │  │  (30+)   │  │  (--channels)  │  │  │                │
+│  │  │  └────┬─────┘  └────┬─────┘  └───────┬────────┘  │  │                │
+│  │  │       │             │                 │           │  │                │
+│  │  │       ▼             ▼                 ▼           │  │                │
+│  │  │  ┌─────────────────────────────────────────────┐  │  │                │
+│  │  │  │   FILES  │  APPS  │  BROWSER  │  TERMINAL   │  │  │                │
+│  │  │  └─────────────────────────────────────────────┘  │  │                │
+│  │  └───────────────────────────────────────────────────┘  │                │
+│  └─────────────────────────────────────────────────────────┘                │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────┐                │
+│  │               EXTERNAL EVENT SOURCES                    │                │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────────────┐   │                │
+│  │  │  CI/CD │ │  Error │ │ Deploy │ │  Webhooks/     │   │                │
+│  │  │  (GHA) │ │ Tracker│ │Pipeline│ │  Monitoring    │   │                │
+│  │  └───┬────┘ └───┬────┘ └───┬────┘ └───────┬────────┘   │                │
+│  │      └──────────┼─────────┼───────────────┘             │                │
+│  │                 ▼         ▼                              │                │
+│  │          Channel Plugin (MCP Server)                     │                │
+│  └─────────────────────────────────────────────────────────┘                │
+└─────────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="2" name="Channel Data Flow — Bidirectional Message Path">
+        <ascii><![CDATA[
+┌─────────────────────────────────────────────────────────────────┐
+│              CHANNEL DATA FLOW (Bidirectional)                  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  INBOUND (Push → Session)                                       │
+│  ════════════════════════                                       │
+│                                                                 │
+│  Sender ──► Platform API ──► Channel Plugin ──► MCP Event       │
+│   (you)     (Telegram)       (Bun script)      <channel         │
+│                                                 source="tg">    │
+│                                    │                            │
+│                              ┌─────▼──────┐                     │
+│                              │ Allowlist   │                     │
+│                              │ Check       │──► DROP (silent)    │
+│                              │ sender_id   │    if not paired    │
+│                              │ ∈ allowed?  │                     │
+│                              └─────┬──────┘                     │
+│                                    │ ✓                          │
+│                                    ▼                            │
+│                         ┌──────────────────┐                    │
+│                         │  Claude Code      │                    │
+│                         │  Agent Loop       │                    │
+│                         │                   │                    │
+│                         │  Reads event      │                    │
+│                         │  Does work        │                    │
+│                         │  (files, tools)   │                    │
+│                         └────────┬─────────┘                    │
+│                                  │                              │
+│  OUTBOUND (Session → Reply)      │                              │
+│  ══════════════════════════      │                              │
+│                                  ▼                              │
+│                         ┌──────────────────┐                    │
+│                         │  reply() tool     │                    │
+│                         │  call via same    │                    │
+│                         │  channel plugin   │                    │
+│                         └────────┬─────────┘                    │
+│                                  │                              │
+│                                  ▼                              │
+│  Terminal shows:          Platform shows:                        │
+│  ┌──────────────────┐    ┌──────────────────┐                   │
+│  │ tool_use: reply  │    │ Claude: "Here's  │                   │
+│  │ status: "sent"   │    │ what I found..." │                   │
+│  │ (no reply text)  │    │ (full response)  │                   │
+│  └──────────────────┘    └──────────────────┘                   │
+│                                                                 │
+│  PERMISSION RELAY (optional)                                    │
+│  ═══════════════════════════                                    │
+│                                                                 │
+│  Claude hits permission prompt ──► Channel forwards to phone    │
+│  Session PAUSES               ◄── You approve/deny remotely     │
+│  Session RESUMES                                                │
+│                                                                 │
+│  ⚠️  Anyone on allowlist can approve/deny via relay!             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="3" name="Feature Taxonomy — Dispatch vs Channels vs Canonical Features">
+        <ascii><![CDATA[
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    FEATURE TAXONOMY TREE                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Claude Code Connectivity                                               │
+│  │                                                                      │
+│  ├── LOCAL (you're at the terminal)                                     │
+│  │   ├── Interactive REPL session                                       │
+│  │   ├── Standard MCP servers (pull/query model)                        │
+│  │   └── Scheduled Tasks (CronCreate — poll on timer)                   │
+│  │                                                                      │
+│  ├── REMOTE CONTROL (you drive, Claude executes locally)                │
+│  │   ├── claude.ai web ──► local session via WebSocket                  │
+│  │   ├── Claude mobile app ──► local session                            │
+│  │   └── ≈ "Dispatch" brand: phone as walkie-talkie                     │
+│  │                                                                      │
+│  ├── CHANNELS (events pushed TO your session)                           │
+│  │   ├── Chat Bridges (bidirectional)                                   │
+│  │   │   ├── Telegram ──► session ──► Telegram reply                    │
+│  │   │   ├── Discord  ──► session ──► Discord reply                     │
+│  │   │   └── iMessage ──► session ──► iMessage reply                    │
+│  │   ├── Webhook Receivers (unidirectional push)                        │
+│  │   │   ├── CI/CD results                                              │
+│  │   │   ├── Error tracker alerts                                       │
+│  │   │   └── Deploy pipeline events                                     │
+│  │   └── Custom Channels (build your own MCP server)                    │
+│  │                                                                      │
+│  ├── CLOUD (fresh sandbox, async)                                       │
+│  │   ├── Claude Code on the Web (GitHub clone → sandbox)                │
+│  │   └── Claude in Slack (@Claude mention → web session)                │
+│  │                                                                      │
+│  └── ENTERPRISE CONTROLS                                                │
+│      ├── channelsEnabled (master switch, default: off)                  │
+│      ├── allowedChannelPlugins (whitelist replacement)                  │
+│      └── Per-session opt-in (--channels flag)                           │
+│                                                                         │
+│  ┌────────────────────────────────────────────────────────┐             │
+│  │  KEY DISTINCTION                                       │             │
+│  │                                                        │             │
+│  │  Remote Control = YOU push commands TO Claude           │             │
+│  │  Channels       = WORLD pushes events TO Claude         │             │
+│  │  Dispatch       = Brand umbrella for both               │             │
+│  │  Cloud sessions = Separate sandbox, no local files      │             │
+│  │  MCP servers    = Claude pulls FROM them (on-demand)    │             │
+│  │  Scheduled      = Claude polls ON timer (cron)          │             │
+│  └────────────────────────────────────────────────────────┘             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="4" name="Security Architecture — Layers of Defense">
+        <ascii><![CDATA[
+┌─────────────────────────────────────────────────────────────────────┐
+│                  SECURITY ARCHITECTURE                               │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  LAYER 1: Organization Policy (Team/Enterprise)                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  channelsEnabled: true/false     ◄── Admin console toggle   │    │
+│  │  allowedChannelPlugins: [...]    ◄── Plugin whitelist       │    │
+│  │                                                             │    │
+│  │  OFF by default. Pro/Max skip this layer entirely.          │    │
+│  └─────────────────────────┬───────────────────────────────────┘    │
+│                            │ ✓ enabled                              │
+│                            ▼                                        │
+│  LAYER 2: Session Opt-in (User)                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  claude --channels plugin:telegram@official                 │    │
+│  │                                                             │    │
+│  │  Only named plugins activate. Being in .mcp.json is NOT     │    │
+│  │  enough — must be in --channels flag.                       │    │
+│  └─────────────────────────┬───────────────────────────────────┘    │
+│                            │ ✓ opted in                             │
+│                            ▼                                        │
+│  LAYER 3: Plugin Allowlist (Anthropic / Org)                        │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Plugin must be on effective allowlist:                      │    │
+│  │    - Anthropic default list (if org hasn't overridden)      │    │
+│  │    - OR org's allowedChannelPlugins list                    │    │
+│  │                                                             │    │
+│  │  --dangerously-load-development-channels bypasses this      │    │
+│  └─────────────────────────┬───────────────────────────────────┘    │
+│                            │ ✓ approved                             │
+│                            ▼                                        │
+│  LAYER 4: Sender Allowlist (Per-Channel)                            │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Each channel maintains its own sender allowlist:           │    │
+│  │                                                             │    │
+│  │  Telegram/Discord:                                          │    │
+│  │    1. Send message to bot → get pairing code                │    │
+│  │    2. /telegram:access pair <code>                          │    │
+│  │    3. /telegram:access policy allowlist                     │    │
+│  │                                                             │    │
+│  │  iMessage:                                                  │    │
+│  │    - Texting yourself = auto-allowed                        │    │
+│  │    - Others: /imessage:access allow <handle>                │    │
+│  │                                                             │    │
+│  │  Unknown sender_id → SILENT DROP                            │    │
+│  └─────────────────────────┬───────────────────────────────────┘    │
+│                            │ ✓ paired                               │
+│                            ▼                                        │
+│  LAYER 5: Permission Prompts (Runtime)                              │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  Claude hits tool permission → SESSION PAUSES                │    │
+│  │                                                             │    │
+│  │  Options:                                                   │    │
+│  │  a) Wait for terminal user to approve                       │    │
+│  │  b) Permission relay via channel (if declared)              │    │
+│  │     ⚠️  Allowlisted sender can approve/deny remotely        │    │
+│  │  c) --dangerously-skip-permissions (unattended, risky)      │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="5" name="Canonical Feature Comparison Matrix">
+        <ascii><![CDATA[
+┌────────────────────────────────────────────────────────────────────────────┐
+│              CANONICAL FEATURE COMPARISON MATRIX                           │
+├────────────────┬──────────┬───────────┬──────────┬──────────┬─────────────┤
+│                │ Web      │ Slack     │ MCP      │ Remote   │ Channels    │
+│                │ Sessions │           │ Servers  │ Control  │             │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Direction      │ async    │ trigger → │ pull ←   │ push →   │ push →      │
+│                │ dispatch │ cloud     │ on-demand│ to local │ to local    │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Environment    │ cloud    │ cloud     │ local    │ local    │ local       │
+│                │ sandbox  │ sandbox   │          │          │             │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Initiator      │ you      │ team      │ Claude   │ you      │ world       │
+│                │          │ (@Claude) │ (query)  │ (phone)  │ (events)    │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Session        │ fresh    │ fresh     │ existing │ existing │ existing    │
+│                │ clone    │ spawn     │          │          │             │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ File Access    │ GitHub   │ GitHub    │ defined  │ full     │ full        │
+│                │ clone    │ clone     │ by server│ desktop  │ desktop     │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Always-on?     │ yes      │ yes       │ no       │ no       │ only while  │
+│                │ (cloud)  │ (cloud)   │ (idle)   │ (active) │ session open│
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Bidirectional? │ no       │ thread    │ req/resp │ yes      │ yes         │
+│                │ (check   │ reply     │          │          │ (chat       │
+│                │  later)  │           │          │          │  bridge)    │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Use Case       │ delegate │ team      │ give     │ steer    │ react to    │
+│                │ async    │ collab    │ Claude   │ session  │ external    │
+│                │ work     │           │ data     │ remotely │ events      │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Auth Model     │ GitHub   │ Slack     │ per-     │ claude   │ allowlist + │
+│                │ + claude │ + claude  │ server   │ .ai auth │ pairing     │
+├────────────────┼──────────┼───────────┼──────────┼──────────┼─────────────┤
+│ Enterprise     │ org      │ org       │ .mcp.json│ managed  │ channels    │
+│ Control        │ policy   │ policy    │ managed  │ settings │ Enabled +   │
+│                │          │           │          │          │ plugin list │
+└────────────────┴──────────┴───────────┴──────────┴──────────┴─────────────┘
+
+  DATA FLOW PATTERNS:
+
+  Web Sessions:   You ═══► Cloud Sandbox ═══► Results (check later)
+  Slack:          @Claude ═══► Cloud Sandbox ═══► Thread reply
+  MCP Servers:    Claude ◄═══ Query ═══► Server (on-demand pull)
+  Remote Control: Phone ═══► Local Session ═══► Desktop actions
+  Channels:       World ═══► Channel Plugin ═══► Local Session ═══► Reply
+  Sched. Tasks:   Timer ═══► Claude polls ═══► React (cron-based)
+        ]]></ascii>
+      </wireframe>
+
+      <insight>Dispatch is the brand umbrella. Remote Control = you commanding Claude. Channels = the world notifying Claude. Together they make the local session a persistent, event-driven agent that both you and external systems can interact with — but only while the machine is awake and the session is open. Cloud features (Web, Slack) trade local file access for always-on availability.</insight>
+    </response>
+  </qa>
+
+  <qa id="3">
+    <question>
+      <text>Improve and extend the canonical wireframes with Scheduled Tasks (/loop, CronCreate, Cloud, Desktop), the full Platforms and Integrations matrix, and the "work when away" taxonomy from official docs.</text>
+      <context>
+        <source>Official Anthropic documentation — Scheduled Tasks page + Platforms and Integrations page</source>
+        <raw><![CDATA[
+SCHEDULED TASKS:
+- /loop skill: quickest way to schedule recurring prompt. Interval syntax: 30m, 2h, default 10m.
+- CronCreate/CronList/CronDelete tools. 5-field cron expressions. Session-scoped, max 50 tasks.
+- 3-day auto-expiry on recurring tasks. Jitter: recurring up to 10% late (cap 15min), one-shot up to 90s early.
+- Three scheduling tiers: Cloud (Anthropic infra, persistent, no local files, 1h min),
+  Desktop (local, persistent, 1min), /loop (session-scoped, local, 1min).
+- CLAUDE_CODE_DISABLE_CRON=1 to disable.
+
+PLATFORMS:
+- CLI: full feature set, Agent SDK, headless, third-party providers
+- Desktop: diff viewer, app preview, computer use, Dispatch
+- VS Code: inline diffs, integrated terminal
+- JetBrains: diff viewer, selection sharing
+- Web: Anthropic cloud, tasks continue after disconnect
+
+INTEGRATIONS:
+- Chrome: browser automation with logged-in sessions
+- GitHub Actions: CI pipeline (PR reviews, issue triage, scheduled)
+- GitLab CI/CD: same for GitLab
+- Code Review: automatic PR review
+- Slack: @Claude mentions → cloud sessions
+- MCP servers + connectors: Linear, Notion, Google Drive, internal APIs
+
+WORK WHEN AWAY (5 modes):
+- Dispatch: phone → Desktop session (pair mobile app)
+- Remote Control: drive running session from claude.ai/mobile
+- Channels: push events from chat/servers into CLI session
+- Slack: @Claude → cloud session
+- Scheduled Tasks: cron across CLI/Desktop/Cloud
+        ]]></raw>
+      </context>
+    </question>
+    <response>
+      <summary>Eight extended wireframes: improved system topology with scheduling, scheduling tier architecture, /loop lifecycle, complete platform matrix, integrations map, work-when-away decision tree, unified connectivity model, and the definitive feature comparison with all dimensions.</summary>
+
+      <wireframe id="6" name="Extended System Topology — All Connectivity Modes">
+        <ascii><![CDATA[
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│              CLAUDE CODE — COMPLETE CONNECTIVITY TOPOLOGY                        │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ╔══════════════════════════════════════════════════════════════════════╗         │
+│  ║                    HUMAN ENTRY POINTS                               ║         │
+│  ╠══════════════════════════════════════════════════════════════════════╣         │
+│  ║                                                                     ║         │
+│  ║  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ║         │
+│  ║  │ Terminal  │ │ VS Code  │ │ JetBrains│ │ Desktop  │ │ Web UI   │ ║         │
+│  ║  │ (CLI)    │ │Extension │ │Extension │ │  App     │ │(claude.ai)║         │
+│  ║  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ ║         │
+│  ╚═══════╪════════════╪════════════╪════════════╪════════════╪════════╝         │
+│          │            │            │            │            │                   │
+│          ▼            ▼            ▼            ▼            ▼                   │
+│  ┌───────────────────────────────────────┐  ┌──────────────────────┐            │
+│  │         LOCAL ENGINE                   │  │   CLOUD ENGINE       │            │
+│  │  (same core, different surfaces)       │  │   (Anthropic infra)  │            │
+│  │                                        │  │                      │            │
+│  │  Agent Loop ◄─── Shared config,        │  │  Fresh sandbox       │            │
+│  │  Tools (30+)     memory, .mcp.json     │  │  GitHub clone        │            │
+│  │  MCP servers                           │  │  Persists after      │            │
+│  │  Full desktop access                   │  │  disconnect          │            │
+│  └────────────┬───────────────────────────┘  └──────────┬───────────┘            │
+│               │                                         │                       │
+│  ╔════════════╪═════════════════════════════════════════╪════════════╗           │
+│  ║            │      REMOTE ACCESS LAYER                │            ║           │
+│  ║            ▼                                         ▼            ║           │
+│  ║  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐   ║           │
+│  ║  │   DISPATCH       │  │ REMOTE CONTROL  │  │   SLACK          │   ║           │
+│  ║  │   Phone → new    │  │ Phone/web →     │  │   @Claude →      │   ║           │
+│  ║  │   Desktop session│  │ existing session │  │   cloud session  │   ║           │
+│  ║  │   (paired app)   │  │ (claude remote- │  │   (team chat)    │   ║           │
+│  ║  │                  │  │  control)       │  │                  │   ║           │
+│  ║  └─────────────────┘  └─────────────────┘  └─────────────────┘   ║           │
+│  ╚══════════════════════════════════════════════════════════════════╝           │
+│               │                                                                 │
+│  ╔════════════╪═══════════════════════════════════════════════════════╗          │
+│  ║            │      EVENT-DRIVEN LAYER                               ║          │
+│  ║            ▼                                                       ║          │
+│  ║  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐    ║          │
+│  ║  │   CHANNELS       │  │ SCHEDULED TASKS │  │  INTEGRATIONS   │    ║          │
+│  ║  │   World pushes   │  │ Time triggers   │  │  CI/CD pushes   │    ║          │
+│  ║  │   events in      │  │ Claude polls    │  │  into pipeline  │    ║          │
+│  ║  │                  │  │                 │  │                  │    ║          │
+│  ║  │  TG/DC/iMsg/     │  │  /loop (session)│  │  GH Actions     │    ║          │
+│  ║  │  Custom MCP      │  │  Desktop (local)│  │  GitLab CI      │    ║          │
+│  ║  │                  │  │  Cloud (remote) │  │  Code Review     │    ║          │
+│  ║  └─────────────────┘  └─────────────────┘  └─────────────────┘    ║          │
+│  ╚═══════════════════════════════════════════════════════════════════╝          │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="7" name="Scheduling Tier Architecture — /loop vs Desktop vs Cloud">
+        <ascii><![CDATA[
+┌──────────────────────────────────────────────────────────────────────────┐
+│               SCHEDULING TIER ARCHITECTURE                               │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  TIER 1: /loop (Session-Scoped)          TIER 2: Desktop Scheduled      │
+│  ═══════════════════════════             ═══════════════════════════     │
+│                                                                          │
+│  ┌──────────────────────────┐            ┌──────────────────────────┐   │
+│  │  /loop 5m check deploy   │            │  Desktop App → Schedule  │   │
+│  │                          │            │                          │   │
+│  │  ┌────────────────────┐  │            │  ┌────────────────────┐  │   │
+│  │  │ CronCreate         │  │            │  │ Persistent daemon  │  │   │
+│  │  │ 5-field cron expr  │  │            │  │ Survives restarts  │  │   │
+│  │  │ 8-char task ID     │  │            │  │ Configurable perms │  │   │
+│  │  └────────┬───────────┘  │            │  └────────┬───────────┘  │   │
+│  │           │              │            │           │              │   │
+│  │           ▼              │            │           ▼              │   │
+│  │  ┌────────────────────┐  │            │  ┌────────────────────┐  │   │
+│  │  │ Scheduler (1s tick)│  │            │  │ Local scheduler    │  │   │
+│  │  │ Low-priority queue │  │            │  │ Background process │  │   │
+│  │  │ Fires between turns│  │            │  │ Full desktop access│  │   │
+│  │  └────────┬───────────┘  │            │  └────────┬───────────┘  │   │
+│  │           │              │            │           │              │   │
+│  │  Constraints:            │            │  Constraints:            │   │
+│  │  • Session must be open  │            │  • Machine must be on    │   │
+│  │  • 3-day auto-expiry     │            │  • No session required   │   │
+│  │  • Max 50 tasks          │            │  • Persistent across     │   │
+│  │  • No catch-up on miss   │            │    restarts              │   │
+│  │  • Min interval: 1min    │            │  • Min interval: 1min    │   │
+│  │  • Jitter applied        │            │  • MCP via config files  │   │
+│  │  • DISABLE_CRON=1 kills  │            │    + connectors          │   │
+│  └──────────────────────────┘            └──────────────────────────┘   │
+│                                                                          │
+│  TIER 3: Cloud Scheduled                                                 │
+│  ═══════════════════════                                                 │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  Anthropic-Managed Infrastructure                                │   │
+│  │                                                                  │   │
+│  │  ┌────────────────────┐  ┌─────────────────────────────────┐    │   │
+│  │  │ /schedule in CLI   │  │  Always-on (no machine needed)  │    │   │
+│  │  │ or web config      │  │  Fresh GitHub clone each run    │    │   │
+│  │  └────────────────────┘  │  Connectors configured per task │    │   │
+│  │                          │  No permission prompts          │    │   │
+│  │  Constraints:            │  Min interval: 1 hour           │    │   │
+│  │  • No local file access  │  Persistent across everything   │    │   │
+│  │  • No desktop tools      └─────────────────────────────────┘    │   │
+│  │  • Runs autonomously                                            │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  DECISION FLOW:                                                          │
+│                                                                          │
+│  Need local files? ──NO──► Cloud Scheduled (always-on, 1h min)          │
+│       │                                                                  │
+│      YES                                                                 │
+│       │                                                                  │
+│  Need persistence? ──NO──► /loop (session-scoped, quick)                │
+│       │                                                                  │
+│      YES                                                                 │
+│       │                                                                  │
+│       └──► Desktop Scheduled (local, persistent, 1min)                  │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="8" name="/loop Lifecycle — From Command to Cron Fire">
+        <ascii><![CDATA[
+┌──────────────────────────────────────────────────────────────────────────┐
+│                /loop LIFECYCLE                                            │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  INPUT PARSING                                                           │
+│  ─────────────                                                           │
+│  /loop 5m check the deploy                                               │
+│  ──┬── ─┬─ ──────┬─────────                                              │
+│    │    │        └── prompt: "check the deploy"                          │
+│    │    └── interval: 5m → cron: */5 * * * *                             │
+│    └── skill invocation                                                  │
+│                                                                          │
+│  INTERVAL FORMS:                                                         │
+│  ┌──────────────────────────────────┬────────────────────────────┐       │
+│  │  /loop 30m check build          │  Leading: 30m → */30 * * * │       │
+│  │  /loop check build every 2h     │  Trailing: 2h → 0 */2 * *  │       │
+│  │  /loop check build              │  Default: 10m → */10 * * *  │       │
+│  └──────────────────────────────────┴────────────────────────────┘       │
+│                                                                          │
+│  UNITS: s (→ round up to 1min)  m (minutes)  h (hours)  d (days)        │
+│  Non-even intervals (7m, 90m) → nearest clean interval + notification    │
+│                                                                          │
+│  EXECUTION TIMELINE                                                      │
+│  ──────────────────                                                      │
+│                                                                          │
+│  t=0        t=5m+jitter   t=10m+jitter        t=3d (EXPIRY)            │
+│  │          │              │                   │                         │
+│  ▼          ▼              ▼                   ▼                         │
+│  CREATE ──► FIRE ────────► FIRE ─── ··· ────► FINAL FIRE + DELETE       │
+│  │          │              │                                            │
+│  │     ┌────┴────┐    ┌───┴────┐                                        │
+│  │     │ Claude  │    │ Claude │                                         │
+│  │     │ busy?   │    │ idle?  │                                         │
+│  │     │ WAIT    │    │ RUN    │                                         │
+│  │     └─────────┘    └────────┘                                        │
+│  │                                                                       │
+│  └─► CronCreate returns 8-char ID                                        │
+│      (e.g., "a1b2c3d4")                                                  │
+│                                                                          │
+│  JITTER MODEL:                                                           │
+│  ┌─────────────────────────────────────────────────────────┐            │
+│  │  Recurring: up to 10% of period late, cap 15min         │            │
+│  │    hourly → fire between :00 and :06                    │            │
+│  │    5-min  → fire up to 30s late                         │            │
+│  │                                                         │            │
+│  │  One-shot: up to 90s early IF at :00 or :30             │            │
+│  │    Avoid with odd minutes (e.g., 3 9 * * *)             │            │
+│  │                                                         │            │
+│  │  Offset = f(task_id) → deterministic, stable            │            │
+│  └─────────────────────────────────────────────────────────┘            │
+│                                                                          │
+│  LOOP OVER COMMANDS:                                                     │
+│  /loop 20m /review-pr 1234                                               │
+│       └──► Each fire runs /review-pr 1234 as if typed                    │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="9" name="Platform Matrix — Where Claude Code Runs">
+        <ascii><![CDATA[
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                     PLATFORM COMPARISON MATRIX                                 │
+├────────────┬──────────┬──────────┬──────────┬──────────┬──────────┬────────────┤
+│            │  CLI     │ Desktop  │ VS Code  │ JetBrains│  Web     │  Mobile    │
+│            │          │  App     │Extension │Extension │(claude.ai│  App       │
+│            │          │          │          │          │  /code)  │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Runs on    │ your     │ your     │ your     │ your     │ Anthropic│ n/a        │
+│            │ machine  │ machine  │ machine  │ machine  │ cloud    │ (remote)   │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Best for   │ terminal │ visual   │ in-editor│ in-IDE   │ long-run │ dispatch / │
+│            │ scripting│ review   │ workflow │ workflow │ async    │ remote ctrl│
+│            │ servers  │ parallel │          │          │ offline  │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Agent SDK  │ YES      │ no       │ no       │ no       │ no       │ no         │
+│ /Headless  │          │          │          │          │          │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Diff view  │ terminal │ built-in │ inline   │ built-in │ web UI   │ read-only  │
+│            │          │ viewer   │ diffs    │ viewer   │          │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Computer   │ no       │ YES      │ no       │ no       │ no       │ no         │
+│ Use        │          │ (Pro/Max)│          │          │          │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Dispatch   │ no       │ YES      │ no       │ no       │ no       │ sender     │
+│            │          │ (receive)│          │          │          │ (trigger)  │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Channels   │ YES      │ no       │ no       │ no       │ no       │ via chat   │
+│            │(--channels│          │          │          │          │ app        │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Remote Ctrl│ YES      │ no       │ YES      │ no       │ driver   │ driver     │
+│            │ (target) │          │ (target) │          │          │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Scheduled  │ /loop    │ Desktop  │ inherits │ no       │ Cloud    │ no         │
+│ Tasks      │ (session)│(persistent│ CLI     │          │(persistent│            │
+│            │          │ daemon)  │          │          │ 1h min)  │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ MCP        │ config   │ config + │ config   │ config   │ connect- │ n/a        │
+│ Servers    │ files    │ connect- │ files    │ files    │ ors only │            │
+│            │          │ ors      │          │          │          │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ 3rd-party  │ YES      │ no       │ no       │ no       │ no       │ no         │
+│ providers  │          │          │          │          │          │            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Local files│ YES      │ YES      │ YES      │ YES      │ NO       │ NO         │
+│            │          │          │          │          │(GH clone)│            │
+├────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────┤
+│ Config     │          shared across local surfaces               │ separate   │
+│ sharing    │          (.claude/, .mcp.json, memory)              │            │
+└────────────┴─────────────────────────────────────────────────────┴────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="10" name="Integrations Map — External Service Connections">
+        <ascii><![CDATA[
+┌──────────────────────────────────────────────────────────────────────────┐
+│                    INTEGRATIONS MAP                                       │
+├──────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│                     ┌─────────────────────┐                              │
+│                     │   CLAUDE CODE        │                              │
+│                     │   (any surface)      │                              │
+│                     └──────────┬──────────┘                              │
+│                                │                                         │
+│          ┌─────────────────────┼─────────────────────┐                   │
+│          │                     │                     │                   │
+│          ▼                     ▼                     ▼                   │
+│  ┌───────────────┐   ┌─────────────────┐   ┌─────────────────┐          │
+│  │  BROWSER       │   │  CI/CD           │   │  TEAM CHAT      │          │
+│  │                │   │                  │   │                  │          │
+│  │  Chrome ext.   │   │  GitHub Actions  │   │  Slack           │          │
+│  │  ┌───────────┐ │   │  ┌────────────┐ │   │  ┌────────────┐ │          │
+│  │  │ Your      │ │   │  │ PR review  │ │   │  │ @Claude    │ │          │
+│  │  │ logged-in │ │   │  │ Issue triage│ │   │  │ → cloud    │ │          │
+│  │  │ sessions  │ │   │  │ Scheduled  │ │   │  │ session    │ │          │
+│  │  │           │ │   │  │ maintenance│ │   │  │ → PR back  │ │          │
+│  │  └───────────┘ │   │  └────────────┘ │   │  └────────────┘ │          │
+│  │                │   │                  │   │                  │          │
+│  │  GitLab CI/CD  │   │  Code Review     │   │                  │          │
+│  │  ┌───────────┐ │   │  ┌────────────┐ │   │                  │          │
+│  │  │ Same as   │ │   │  │ Auto-review│ │   │                  │          │
+│  │  │ GH Actions│ │   │  │ every PR   │ │   │                  │          │
+│  │  │ for GitLab│ │   │  │ pre-human  │ │   │                  │          │
+│  │  └───────────┘ │   │  └────────────┘ │   │                  │          │
+│  └───────────────┘   └─────────────────┘   └─────────────────┘          │
+│                                                                          │
+│          ┌─────────────────────────────────────────┐                     │
+│          │          MCP SERVERS + CONNECTORS        │                     │
+│          │          (extend to anything)            │                     │
+│          │                                          │                     │
+│          │  ┌────────┐ ┌────────┐ ┌─────────────┐  │                     │
+│          │  │ Linear │ │ Notion │ │ Google Drive │  │                     │
+│          │  └────────┘ └────────┘ └─────────────┘  │                     │
+│          │  ┌────────┐ ┌────────────────────────┐  │                     │
+│          │  │ Custom │ │ Internal APIs          │  │                     │
+│          │  │ servers│ │ (your own MCP servers) │  │                     │
+│          │  └────────┘ └────────────────────────┘  │                     │
+│          └─────────────────────────────────────────┘                     │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="11" name="Work When Away — Decision Tree">
+        <ascii><![CDATA[
+┌──────────────────────────────────────────────────────────────────────────────┐
+│               WORK WHEN AWAY — DECISION TREE                                 │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  "I need Claude to work when I'm not at my terminal"                         │
+│                                                                              │
+│  What triggers it?                                                           │
+│  │                                                                           │
+│  ├── ME (on demand, from phone/browser)                                      │
+│  │   │                                                                       │
+│  │   ├── New task, don't care about local files?                             │
+│  │   │   └──► DISPATCH (phone → Desktop session)                             │
+│  │   │       Setup: pair mobile app with Desktop                             │
+│  │   │       Runs on: your machine (Desktop)                                 │
+│  │   │                                                                       │
+│  │   └── Steer an EXISTING session?                                          │
+│  │       └──► REMOTE CONTROL (phone/web → running session)                   │
+│  │           Setup: claude remote-control                                    │
+│  │           Runs on: your machine (CLI or VS Code)                          │
+│  │                                                                           │
+│  ├── MY TEAM (from chat)                                                     │
+│  │   └──► SLACK (@Claude in channel → cloud session → PR)                    │
+│  │       Setup: install Slack app + enable web sessions                      │
+│  │       Runs on: Anthropic cloud                                            │
+│  │                                                                           │
+│  ├── THE WORLD (external events)                                             │
+│  │   │                                                                       │
+│  │   ├── From chat apps (Telegram/Discord/iMessage)?                         │
+│  │   │   └──► CHANNELS (push into running CLI session)                       │
+│  │   │       Setup: install channel plugin + pair                            │
+│  │   │       Runs on: your machine (CLI, session must be open)               │
+│  │   │                                                                       │
+│  │   └── From CI/webhooks/monitoring?                                        │
+│  │       └──► CHANNELS (custom MCP server pushes events)                     │
+│  │           Setup: build your own channel                                   │
+│  │           Runs on: your machine (CLI, session must be open)               │
+│  │                                                                           │
+│  └── TIME (recurring schedule)                                               │
+│      │                                                                       │
+│      ├── Quick poll during this session?                                     │
+│      │   └──► /loop (session-scoped, dies on exit)                           │
+│      │       Min: 1min, expires: 3 days                                      │
+│      │                                                                       │
+│      ├── Need local files + persistence?                                     │
+│      │   └──► DESKTOP SCHEDULED (survives restart)                           │
+│      │       Min: 1min, configurable permissions                             │
+│      │                                                                       │
+│      └── Don't need local files, must be reliable?                           │
+│          └──► CLOUD SCHEDULED (Anthropic infra, always-on)                   │
+│              Min: 1 hour, GitHub clone each run                              │
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────┐          │
+│  │                   TRADEOFF AXES                                 │          │
+│  │                                                                 │          │
+│  │  Reliability ◄─────────────────────────────────────► Locality   │          │
+│  │  (Cloud: always on,     (Local: full desktop,                   │          │
+│  │   no machine needed)     real files, MCP servers)               │          │
+│  │                                                                 │          │
+│  │  Reactive ◄────────────────────────────────────────► Proactive  │          │
+│  │  (Channels: world       (Scheduled: Claude                      │          │
+│  │   pushes events)         polls on timer)                        │          │
+│  │                                                                 │          │
+│  │  Interactive ◄─────────────────────────────────────► Autonomous │          │
+│  │  (Remote Control:       (Dispatch/Cloud:                        │          │
+│  │   you steer in          fire and check later)                   │          │
+│  │   real-time)                                                    │          │
+│  └────────────────────────────────────────────────────────────────┘          │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="12" name="Unified Connectivity Model — Push/Pull/Schedule/Drive">
+        <ascii><![CDATA[
+┌──────────────────────────────────────────────────────────────────────────────┐
+│             UNIFIED CONNECTIVITY MODEL                                       │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Four interaction paradigms, one engine:                                      │
+│                                                                              │
+│                          ┌─────────────────┐                                 │
+│                          │  CLAUDE CODE     │                                 │
+│               ┌─────────►│  SESSION         │◄──────────┐                    │
+│               │          │  (Agent Loop)    │           │                    │
+│               │          └──┬──────────┬───┘           │                    │
+│               │             │          │                │                    │
+│               │             ▼          ▼                │                    │
+│  ┌────────────┴───┐   ┌─────────┐ ┌────────┐  ┌───────┴────────┐           │
+│  │                │   │         │ │        │  │                │           │
+│  │  PUSH          │   │  PULL   │ │SCHEDULE│  │  DRIVE         │           │
+│  │  (event-driven)│   │(on-demand│ │(time)  │  │  (interactive) │           │
+│  │                │   │  query) │ │        │  │                │           │
+│  ├────────────────┤   ├─────────┤ ├────────┤  ├────────────────┤           │
+│  │                │   │         │ │        │  │                │           │
+│  │  Channels      │   │  MCP    │ │ /loop  │  │  Terminal      │           │
+│  │   TG/DC/iMsg   │   │ Servers │ │Desktop │  │  Remote Ctrl   │           │
+│  │   Webhooks     │   │         │ │ Cloud  │  │  Dispatch      │           │
+│  │   CI alerts    │   │ Claude  │ │        │  │                │           │
+│  │                │   │ queries │ │ Claude │  │  You type/     │           │
+│  │  World ──►     │   │ when    │ │ fires  │  │  send, Claude  │           │
+│  │  Session       │   │ needed  │ │ on cron│  │  executes      │           │
+│  │                │   │  ◄──►   │ │  ──►   │  │   ──►          │           │
+│  └────────────────┘   └─────────┘ └────────┘  └────────────────┘           │
+│                                                                              │
+│                                                                              │
+│  SESSION LIFECYCLE:                                                          │
+│                                                                              │
+│  ┌────────┐    ┌──────────┐    ┌───────────┐    ┌──────────┐               │
+│  │ START  │───►│  IDLE    │◄──►│  WORKING  │───►│  EXIT    │               │
+│  │        │    │          │    │           │    │          │               │
+│  │ claude │    │ Accepts: │    │ Processes │    │ All cron │               │
+│  │ --flags│    │ • push   │    │ current   │    │ tasks    │               │
+│  │        │    │ • cron   │    │ turn      │    │ gone     │               │
+│  │        │    │ • drive  │    │           │    │          │               │
+│  │        │    │ • pull   │    │ Queues:   │    │ Channels │               │
+│  └────────┘    │          │    │ • push    │    │ disconnect│              │
+│                │          │    │ • cron    │    │          │               │
+│                └──────────┘    └───────────┘    └──────────┘               │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+        ]]></ascii>
+      </wireframe>
+
+      <wireframe id="13" name="Definitive Feature Comparison — All Dimensions">
+        <ascii><![CDATA[
+┌──────────────────────────────────────────────────────────────────────────────────────┐
+│                    DEFINITIVE FEATURE COMPARISON — ALL DIMENSIONS                     │
+├──────────────┬──────────┬──────────┬──────────┬──────────┬──────────┬────────────────┤
+│              │ Dispatch │ Remote   │ Channels │ Slack    │ Web      │ Scheduled      │
+│              │          │ Control  │          │          │ Sessions │ Tasks          │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Trigger      │ you      │ you      │ world    │ team     │ you      │ time           │
+│              │ (phone)  │ (phone/  │ (events) │ (@Claude)│ (web UI) │ (cron)         │
+│              │          │  web)    │          │          │          │                │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Runs on      │ Desktop  │ CLI /    │ CLI      │ Anthropic│ Anthropic│ CLI / Desktop /│
+│              │ (local)  │ VS Code  │ (local)  │ cloud    │ cloud    │ Cloud          │
+│              │          │ (local)  │          │          │          │                │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Session      │ new      │ existing │ existing │ new      │ new      │ depends on tier│
+│              │          │          │          │ (cloud)  │ (sandbox)│                │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Direction    │ you ──►  │ you ──►  │ world──► │ team ──► │ you ──►  │ timer ──►      │
+│              │ Claude   │ Claude   │ Claude   │ cloud    │ sandbox  │ Claude         │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Local files  │ YES      │ YES      │ YES      │ NO       │ NO       │ /loop: YES     │
+│              │          │          │          │ (clone)  │ (clone)  │ Desktop: YES   │
+│              │          │          │          │          │          │ Cloud: NO      │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Machine      │ YES      │ YES      │ YES      │ NO       │ NO       │ /loop: YES     │
+│ must be on   │          │          │          │          │          │ Desktop: YES   │
+│              │          │          │          │          │          │ Cloud: NO      │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Session      │ NO       │ YES      │ YES      │ NO       │ NO       │ /loop: YES     │
+│ must be open │ (spawns) │          │          │          │          │ Desktop: NO    │
+│              │          │          │          │          │          │ Cloud: NO      │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Persistent   │ YES      │ NO       │ NO       │ YES      │ YES      │ /loop: NO      │
+│ across       │ (Desktop │ (session │ (session │ (cloud)  │ (cloud)  │ Desktop: YES   │
+│ restarts     │  manages)│  bound)  │  bound)  │          │          │ Cloud: YES     │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Bidir reply  │ YES      │ YES      │ YES      │ thread   │ NO       │ NO             │
+│              │ (thread) │ (live)   │ (bridge) │ reply    │(check    │ (fire & forget)│
+│              │          │          │          │          │ later)   │                │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Setup        │ pair     │ claude   │ plugin + │ Slack    │ enable   │ /loop: none    │
+│ effort       │ mobile   │ remote-  │ pair +   │ app +    │ web      │ Desktop: config│
+│              │ app      │ control  │ --channel│ web      │ sessions │ Cloud: /schedule│
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Min interval │ n/a      │ n/a      │ n/a      │ n/a      │ n/a      │ /loop: 1min    │
+│              │ (on-     │ (on-     │ (event-  │ (event-  │ (on-     │ Desktop: 1min  │
+│              │  demand) │  demand) │  driven) │  driven) │  demand) │ Cloud: 1hr     │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Enterprise   │ Desktop  │ managed  │ channels │ org      │ org      │ per tier       │
+│ controls     │ policy   │ settings │ Enabled +│ policy   │ policy   │ controls       │
+│              │          │          │ plugin   │          │          │                │
+│              │          │          │ whitelist│          │          │                │
+├──────────────┼──────────┼──────────┼──────────┼──────────┼──────────┼────────────────┤
+│ Best for     │ delegate │ steer    │ react to │ team     │ delegate │ recurring      │
+│              │ from     │ in-prog  │ external │ collab   │ async    │ automation     │
+│              │ phone    │ work     │ events   │ from chat│ work     │ polling        │
+└──────────────┴──────────┴──────────┴──────────┴──────────┴──────────┴────────────────┘
+
+  COMPLETE DATA FLOW PATTERNS:
+
+  Dispatch:       Phone ═══► Desktop (new session) ═══► Work ═══► Reply in thread
+  Remote Control: Phone/Web ═══► Existing Session ═══► You drive live
+  Channels:       World ═══► Channel Plugin ═══► Existing Session ═══► Reply via platform
+  Slack:          @Claude ═══► Anthropic Cloud ═══► New Session ═══► Thread reply + PR
+  Web Sessions:   You ═══► Cloud Sandbox (GH clone) ═══► Results (check later)
+  /loop:          Timer ═══► Existing Session (between turns) ═══► React
+  Desktop Sched:  Timer ═══► Desktop daemon ═══► New/existing session ═══► React
+  Cloud Sched:    Timer ═══► Anthropic infra (fresh clone) ═══► React autonomously
+  MCP Servers:    Claude ◄═══► Server (on-demand pull, not push)
+  Chrome:         Claude ═══► Browser (your sessions) ═══► Automate sites
+  CI/CD:          Pipeline trigger ═══► Claude in GH Actions/GitLab ═══► PR/review
+        ]]></ascii>
+      </wireframe>
+
+      <insight>The complete Claude Code connectivity model has four paradigms: DRIVE (you command), PUSH (world notifies), PULL (Claude queries), SCHEDULE (time triggers). Dispatch and Remote Control are both DRIVE but differ in session lifecycle (new vs existing). Channels and Slack are both PUSH but differ in runtime (local vs cloud). Scheduled Tasks span all three runtimes (session/local/cloud) on the SCHEDULE axis. The fundamental tradeoff is locality vs reliability: local gives desktop access, cloud gives always-on resilience.</insight>
+    </response>
+  </qa>
+
+</research>
